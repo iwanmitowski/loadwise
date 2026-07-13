@@ -6,7 +6,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 
 | ID | Task | Track | Owner | Depends | Prompt | Status |
 |---|---|---|---|---|---|---|
-| T01 | Scaffold, tooling, CI, Vercel deploy | C | — | — | [T01](prompts/T01-scaffold-and-deploy.md) | todo |
+| T01 | Scaffold, tooling, CI, Vercel deploy | C | ivan-mitovski | — | [T01](prompts/T01-scaffold-and-deploy.md) | done |
 | T02 | Domain types, vehicle & cargo catalog, config | A | — | — | [T02](prompts/T02-domain-types-and-data.md) | todo |
 | T03 | Seeded RNG + demo fixtures | A | — | T02 | [T03](prompts/T03-rng-and-fixtures.md) | todo |
 | T04 | Scenario generator | A | — | T02, T03 | [T04](prompts/T04-scenario-generator.md) | todo |
