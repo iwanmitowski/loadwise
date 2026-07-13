@@ -11,6 +11,7 @@
   - jsdom suites inject `src/test/fakeOptimizerClient.ts` via new `setOptimizerClient()` seam (jsdom has no Worker); UI test timer flushes became `runAllTimersAsync` since the client settles through microtasks.
   - Manual browser click-through (real progress bar, cancel mid-run, rapid double-run) still owed a human pass — noted in the PR; T19 Playwright will automate it.
 - Follow-ups: worker progress percent is coarse for tiny scenarios (optimize emits ~1 msg/trip); fine for demo sizes. Store could expose `elapsedMs` in the progress UI later (T16 shows it in the report).
+- Addendum (same session, post-review): closed three coverage gaps on this branch — store error path (worker failure → `status: 'error'` + retry recovers), unit tests for `planning/totals.ts` (chips grouping, zero-cargo, weight-vs-volume ratio independence incl. > 1), and TotalsBar over-capacity render (amber + multi-trip hint). The totals tests strictly belong to T10's scope but ride this branch. 180 tests green.
 
 ## [2026-07-14 00:30] T10 — Scenario Setup & Planning screens
 - Dev: daniel-dimitrov · Model: Fable 5 · Branch: feat/T10-setup-planning-screens
