@@ -14,3 +14,15 @@
   - **Vercel deploy is not done** — it requires connecting the GitHub repo in the Vercel dashboard (framework preset: Vite), which needs the owner's authenticated account. README has a `_TBD_` live-URL placeholder to fill in once connected. Acceptance criteria "public Vercel URL" + "CI green on the PR" remain owner-actioned.
   - Production bundle is ~1 MB (three.js) → Vite chunk-size warning only. Fine for MVP; revisit code-splitting in T20 polish if needed.
   - Node was installed only to the user PATH (winget) — a fresh shell picks it up; this session prepends it manually.
+
+## [2026-07-13 22:07] T02 — Domain types, vehicle & cargo catalog, config
+- Dev: ivan-mitovski · Model: Opus 4.8 (1M) · Branch: feat/T02-domain-types
+- Done: created the full `src/types/` contract (geometry, vehicle, cargo, shop, scenario, optimization, worker) with barrel re-export; encoded the three vehicles and six cargo templates exactly per the T02 tables; added `getVehicle`/`buildScenarioVehicle` (door filtering) and `getTemplate`/`itemDimensions`/`itemVolume` helpers; `DEFAULT_OPTIMIZER_CONFIG` + `SCORE_WEIGHTS`. 11 unit tests (rotation swap, volume, template flags, door centring/positioning, side-door filtering). typecheck + lint + test all green; no runtime deps added.
+- Files: src/types/{geometry,vehicle,cargo,shop,scenario,optimization,worker,index}.ts, src/features/vehicles/vehicles.ts, src/features/vehicles/vehicles.test.ts, src/features/cargo/templates.ts, src/features/cargo/templates.test.ts, src/features/optimizer/config.ts, docs/TASKS.md
+- Decisions/deviations:
+  - `index.ts` uses `export type *` (verbatimModuleSyntax is on — value-style re-export of type-only modules would error).
+  - Door geometry computed from a private `VehicleSpec` table: rear door min-corner `x = (width - doorWidth)/2, y=0, z=0`; side doors on the x=0 (left) / x=width (right) wall, `width` along Z, min-corner z from the table, y=0. `getVehicle` exposes all three candidate doors; `buildScenarioVehicle` keeps rear + chosen side (or none). Documented the axis convention on `VehicleDoor`.
+  - Added small convenience exports not named in the prompt: `VEHICLE_IDS`, `CARGO_CATEGORIES` (stable ordered lists for UI/generation later). No logic, no scope creep.
+- Follow-ups:
+  - Types are the shared contract — after merge, announce "types are locked" to the team. Any later change to `src/types/` needs a `[TYPES CHANGE]` PR title + team ping.
+  - PR requires review by both other developers before merge (T02 acceptance criterion).
