@@ -10,7 +10,13 @@ Read `CLAUDE.md` §Domain conventions, `idea.md` §Optimization Strategy, §Plac
 
 ```ts
 // src/features/optimizer/placeTrip.ts
-export type TripPlanInput = { items: CargoItem[]; shops: Shop[]; vehicle: VehicleDefinition; config: OptimizerConfig };
+export type TripPlanInput = {
+  items: CargoItem[]; shops: Shop[]; vehicle: VehicleDefinition; config: OptimizerConfig;
+  // Added by T07: per-item hook called once after each sequence item is processed
+  // ({ index, total }); returning truthy aborts the tail (returned unplaced with
+  // detail 'time-limit'). Undefined ⇒ original behaviour.
+  onItemPlaced?: (progress: { index: number; total: number }) => boolean | void;
+};
 export type TripPlanOutput = {
   placements: Array<Omit<CargoPlacement, 'tripId'>>;   // tripId assigned by T07
   unplaced: Array<{ cargoId: string; shopId: string; reason: UnplacedReason; detail?: string }>;
