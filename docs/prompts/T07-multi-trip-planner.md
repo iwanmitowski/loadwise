@@ -17,7 +17,7 @@ export function optimize(scenario: Scenario, config: OptimizerConfig, onProgress
 
 ## Algorithm (decisions already made)
 
-1. **Pre-filter permanents** before trip 1: items that fit in no orientation → `exceeds-vehicle-dimensions`; single item weight > payload → `exceeds-payload`. Both `permanent: true`, never enter the loop.
+1. **Pre-filter permanents** before trip 1: items that fit in no orientation → `exceeds-vehicle-dimensions`; items that pass `fitsThroughDoor` (T05) for none of the vehicle's doors in any rotation → `exceeds-vehicle-dimensions` (detail: "does not fit through any door"); single item weight > payload → `exceeds-payload`. All `permanent: true`, never enter the loop.
 2. **Trip loop** (max `config.maxTrips` = 10): run `planSingleTrip` on remaining items (all remaining shops, original deliveryOrder values kept).
 3. **Anti-split rule**: after a trip plan returns, for each shop that got **split** (some placed, some unplaced): if < 50% of its items were placed AND at least one other shop placed ≥ 1 item in this trip, remove that shop's placements from the trip and defer the whole shop. Re-run is NOT needed — removal is enough for MVP (space stays unused; note as known simplification). Record genuinely split shops in `metrics.splitShopIds`.
 4. **Loop safety**: if a trip places 0 items, mark all remaining as `no-valid-placement`, `permanent: true`, and stop (prevents infinite loops — idea.md requirement).

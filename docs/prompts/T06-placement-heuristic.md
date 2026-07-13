@@ -20,7 +20,7 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput;
 
 ## Algorithm (decisions already made — implement as specified)
 
-**1. Door assignment (per shop).** `shop.preferredDoor` if the vehicle has that door, else `rear`. All the shop's items get this `assignedDoor`.
+**1. Door assignment (per shop).** `shop.preferredDoor` if the vehicle has that door, else `rear`. All the shop's items get this `assignedDoor` — except items that don't pass `fitsThroughDoor` (T05, either rotation) for the side door: those individually fall back to `rear` (e.g. a beverage pallet can't pass the cargo-van's 110×150 side door; the shop's crates still can). Items fitting through NO door never reach this module — T07 pre-filters them.
 
 **2. Processing order.** Iterate shops in **reverse delivery order** (last stop first → it ends up deepest for rear-door unloading). Within a shop, sort items: `floorOnly` first → weight desc → volume desc → id asc. This yields the global insertion sequence; `loadingOrder` = 1-based index of successful placement.
 

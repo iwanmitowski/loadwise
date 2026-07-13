@@ -15,6 +15,11 @@ export function toPlacedBox(placement: CargoPlacement, template: CargoTemplate):
 export function boxesOverlap(a: PlacedBox, b: PlacedBox): boolean;       // strict interior overlap; touching faces (shared edge/coordinate) is NOT overlap
 export function insideVehicle(box: PlacedBox, space: Dimensions): boolean;
 export function footprintOverlapArea(a: PlacedBox, b: PlacedBox): number; // XZ-plane intersection area in cm²
+export function fitsThroughDoor(size: Dimensions, door: VehicleDoor): boolean;
+// cross-section perpendicular to travel must fit the opening:
+// rear door (travel along Z): size.width ≤ door.width && size.height ≤ door.height
+// side door (travel along X): size.depth ≤ door.width && size.height ≤ door.height
+// zero clearance margin (documented simplification); caller tries both rotations
 
 // src/features/optimizer/support.ts
 export type SupportInfo = { ratio: number; supporters: string[] };       // ratio: 0..1 of base area supported
@@ -23,7 +28,7 @@ export function computeSupport(box: PlacedBox, placed: PlacedBox[]): SupportInfo
 // else: supporters are boxes whose top face y === box.min.y; ratio = Σ footprintOverlapArea / baseArea
 
 // src/features/optimizer/validate.ts
-export type ConstraintViolation = { code: 'out-of-bounds' | 'overlap' | 'over-payload' | 'insufficient-support' | 'floor-only-violated' | 'unstackable-support' | 'support-overweight'; cargoId: string; detail: string };
+export type ConstraintViolation = { code: 'out-of-bounds' | 'overlap' | 'over-payload' | 'insufficient-support' | 'floor-only-violated' | 'unstackable-support' | 'support-overweight' | 'door-fit'; cargoId: string; detail: string };
 export function validateCandidate(candidate: PlacedBox, placed: PlacedBox[], vehicle: VehicleDefinition, config: OptimizerConfig, currentWeightKg: number): ConstraintViolation[];  // fast path used by the heuristic; empty array = valid
 export function validateLoad(placements: CargoPlacement[], scenario: Scenario, config: OptimizerConfig): ConstraintViolation[];  // full re-check of a finished trip, used by report + tests
 ```
@@ -37,7 +42,8 @@ export function validateLoad(placements: CargoPlacement[], scenario: Scenario, c
 5. **Floor-only**: template with `floorOnly` ⇒ `min.y === 0`.
 6. **Unstackable supporters**: every supporter's template must have `stackable: true` (this automatically covers fragile boxes and beverage pallets).
 7. **Supporter weight**: for each supporter, total weight resting **directly** on it (all boxes whose bottom = its top, weight attributed proportionally to contact area) must stay ≤ its `maxSupportedWeightKg`. Direct load only — no transitive propagation (documented simplification).
-8. Upright is structural (rotation only swaps w/d) — no check needed; note it.
+8. **Door fit** (`validateLoad` only, not the hot path — door assignment is T06's job): each placed item passes `fitsThroughDoor` for its `assignedDoor` in at least one rotation → else `door-fit` violation. T06/T07 should make this unreachable; this is the self-check that catches them lying.
+9. Upright is structural (rotation only swaps w/d) — no check needed; note it.
 
 `validateLoad` re-runs all of the above over a complete placement list and also catches duplicate cargoIds and overlapping pairs (idea.md edge case "Two cargo items receive overlapping positions").
 
@@ -49,7 +55,7 @@ export function validateLoad(placements: CargoPlacement[], scenario: Scenario, c
 
 ## Tests
 
-Table-driven Vitest cases per rule (valid + invalid pairs), plus: touching faces not an overlap; box on two supporters splitting weight; support exactly at 70% passes, 69.x% fails (construct with integer areas); fixture from T03 passes `validateLoad` cleanly (add that test to the fixture's TODO marker).
+Table-driven Vitest cases per rule (valid + invalid pairs), plus: touching faces not an overlap; box on two supporters splitting weight; support exactly at 70% passes, 69.x% fails (construct with integer areas); door fit: beverage pallet (h160) fails the cargo-van side door (110×150) in both rotations but passes its rear door (150×170); fixture from T03 passes `validateLoad` cleanly (add that test to the fixture's TODO marker).
 
 ## Out of scope
 
