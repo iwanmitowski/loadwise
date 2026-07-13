@@ -25,7 +25,7 @@ Read `idea.md` §Required Screens (Scenario Setup, Planning View) and §Function
 ## Decisions already made
 
 - No form library, no router. Local component state only for ephemeral UI, everything meaningful in stores.
-- Number formatting helper `src/utils/format.ts`: `fmtM(cm)`, `fmtKg`, `fmtPct` — reused by T16.
+- Number formatting helper `src/utils/format.ts`: `fmtM(cm)`, `fmtKg`, `fmtPct` — reused by T16. (Implementation also added `fmtM3(cm3)` and `fmtDims(dims)` for volume and W×H×D lines.)
 - Component files under `src/components/setup/` and `src/components/planning/`.
 
 ## Tests

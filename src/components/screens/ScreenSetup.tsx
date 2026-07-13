@@ -1,76 +1,92 @@
+import { SeedField } from '@/components/setup/SeedField'
+import { ShopCountField } from '@/components/setup/ShopCountField'
+import { SideDoorPicker } from '@/components/setup/SideDoorPicker'
+import { VehiclePicker } from '@/components/setup/VehiclePicker'
 import { useScenarioStore } from '@/state/scenarioStore'
 import { useUiStore } from '@/state/uiStore'
 
 /**
- * Setup screen — placeholder shell (T10 fills in the real config form).
- *
- * Layout slots T10 will own:
- *  - vehicle picker, side-door choice, shop-count slider, seed field
- *  - "Generate" + "Randomize seed" actions
- *  - scenario preview / shop legend once generated
- *
- * For now it exposes just enough to drive the happy path: generate a scenario,
- * then advance to planning.
+ * Scenario Setup — vehicle, side door, shop count and seed, then generate.
+ * All config lives in the scenario store; this screen is a pure form over it.
  */
 export function ScreenSetup() {
   const config = useScenarioStore((s) => s.config)
-  const scenario = useScenarioStore((s) => s.scenario)
+  const setConfig = useScenarioStore((s) => s.setConfig)
   const generate = useScenarioStore((s) => s.generate)
   const randomizeSeed = useScenarioStore((s) => s.randomizeSeed)
   const goTo = useUiStore((s) => s.goTo)
 
+  const onGenerate = () => {
+    generate()
+    goTo('planning')
+  }
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8 p-8">
       <div>
         <h2 className="text-xl font-semibold">Set up scenario</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Placeholder — the real configuration form arrives in T10.
+          Pick a vehicle and delivery settings, then generate a reproducible
+          scenario.
         </p>
       </div>
 
-      <dl className="grid grid-cols-2 gap-2 rounded-lg bg-slate-900 p-4 text-sm">
-        <dt className="text-slate-400">Vehicle</dt>
-        <dd>{config.vehicleId}</dd>
-        <dt className="text-slate-400">Side door</dt>
-        <dd>{config.sideDoor}</dd>
-        <dt className="text-slate-400">Shops</dt>
-        <dd>{config.shopCount}</dd>
-        <dt className="text-slate-400">Seed</dt>
-        <dd className="font-mono">{config.seed}</dd>
-      </dl>
+      <Field label="Vehicle">
+        <VehiclePicker
+          value={config.vehicleId}
+          onChange={(vehicleId) => setConfig({ vehicleId })}
+        />
+      </Field>
 
-      <div className="flex flex-wrap gap-3">
+      <Field label="Side door">
+        <SideDoorPicker
+          value={config.sideDoor}
+          onChange={(sideDoor) => setConfig({ sideDoor })}
+        />
+      </Field>
+
+      <Field label="Shops">
+        <ShopCountField
+          value={config.shopCount}
+          onChange={(shopCount) => setConfig({ shopCount })}
+        />
+      </Field>
+
+      <Field label="Seed">
+        <SeedField
+          value={config.seed}
+          onChange={(seed) => setConfig({ seed })}
+          onRandomize={randomizeSeed}
+        />
+      </Field>
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-slate-800 pt-6">
         <button
           type="button"
-          onClick={randomizeSeed}
-          className="rounded-md border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
-        >
-          Randomize seed
-        </button>
-        <button
-          type="button"
-          onClick={generate}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500"
+          onClick={onGenerate}
+          className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium hover:bg-indigo-500"
         >
           Generate scenario
         </button>
-        {scenario && (
-          <button
-            type="button"
-            onClick={() => goTo('planning')}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500"
-          >
-            Continue to planning →
-          </button>
-        )}
+        {/* T17 activates demo mode; placeholder so the layout is final. */}
+        <button
+          type="button"
+          disabled
+          title="Coming soon"
+          className="cursor-not-allowed rounded-md border border-slate-800 px-5 py-2.5 text-sm text-slate-600"
+        >
+          Load demo
+        </button>
       </div>
+    </div>
+  )
+}
 
-      {scenario && (
-        <p className="text-sm text-emerald-400">
-          Scenario ready: {scenario.shops.length} shop(s) on the{' '}
-          {scenario.vehicle.name}.
-        </p>
-      )}
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-sm font-medium text-slate-300">{label}</span>
+      {children}
     </div>
   )
 }

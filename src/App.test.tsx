@@ -19,7 +19,7 @@ const stepButton = (label: string) =>
   within(screen.getByRole('navigation')).getByRole('button', { name: label })
 
 describe('App shell — happy path', () => {
-  it('gates the stepper and clicks through generate → optimize → result', () => {
+  it('gates the stepper and clicks through generate → optimize → simulation', () => {
     render(<App />)
 
     // Setup screen shown; downstream steps disabled until prerequisites exist.
@@ -27,23 +27,19 @@ describe('App shell — happy path', () => {
     expect(stepButton('Planning')).toBeDisabled()
     expect(stepButton('Simulation')).toBeDisabled()
 
-    // Generate a scenario → Planning unlocks.
+    // Generate a scenario → Planning unlocks and Generate navigates onto it.
     fireEvent.click(screen.getByRole('button', { name: 'Generate scenario' }))
     expect(stepButton('Planning')).toBeEnabled()
+    expect(screen.getByRole('heading', { name: 'Planning' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Continue to planning/ }))
-    expect(screen.getByText('Plan the load')).toBeInTheDocument()
-
-    // Optimize → fake worker resolves → result present, Simulation/Report unlock.
+    // Optimize → fake worker resolves → result present, Simulation/Report
+    // unlock, and Planning auto-advances to the simulation placeholder.
     fireEvent.click(screen.getByRole('button', { name: 'Optimize' }))
     act(() => vi.runAllTimers())
 
     expect(useOptimizationStore.getState().result).not.toBeNull()
     expect(stepButton('Simulation')).toBeEnabled()
     expect(stepButton('Report')).toBeEnabled()
-
-    // Navigate onward.
-    fireEvent.click(screen.getByRole('button', { name: /View simulation/ }))
     expect(screen.getByText('Delivery simulation')).toBeInTheDocument()
   })
 })
