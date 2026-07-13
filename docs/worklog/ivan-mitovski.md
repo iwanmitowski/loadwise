@@ -26,3 +26,16 @@
 - Follow-ups:
   - Types are the shared contract — after merge, announce "types are locked" to the team. Any later change to `src/types/` needs a `[TYPES CHANGE]` PR title + team ping.
   - PR requires review by both other developers before merge (T02 acceptance criterion).
+
+## [2026-07-13 22:14] T03 — Seeded RNG + demo fixtures
+- Dev: ivan-mitovski · Model: Opus 4.8 (1M) · Branch: feat/T03-rng-fixtures
+- Done: implemented `createRng` (xmur3 hash → mulberry32 PRNG) exposing `next/int/pick/shuffle/chance`, all deterministic per seed, no `Math.random`; added `downloadJson` browser util (DOM-exempt, noted in file); hand-authored `demoScenario` + `demoResult` fixtures for the box-truck with the 9-placement layout verbatim from the prompt table + 1 deferred beverage pallet. 17 new tests (RNG determinism/bounds/permutation + fixture structure). typecheck + lint + test all green (28 total).
+- Files: src/utils/rng.ts, src/utils/rng.test.ts, src/utils/download.ts, src/fixtures/demo.ts, src/fixtures/demo.test.ts, docs/TASKS.md
+- Decisions/deviations:
+  - Fixture metrics: `totalWeightKg` (1482), utilizations, used/empty volume computed by hand from the layout and matched the prompt's targets (weightUtil ≈ 0.296 → hard-coded 0.30; volUtil ≈ 0.153 → 0.15). Balance figures (`leftRightBalance` 0.62, `frontRearBalance` 0.71) are plausible hand-picked placeholders — T08 owns their real semantics; per the prompt these are "fill in the rest plausibly" fields.
+  - `elapsedMs: 0` — this is authored data, not a timed optimizer run; no `Date.now()` (determinism rule).
+  - `demoScenario.vehicle` is built via `buildScenarioVehicle('box-truck','none')` (rear door only) rather than a re-hand-authored door array, so it stays consistent with the vehicle catalog.
+  - `demo.test.ts` carries a `TODO(T05)` marker for the future `validateLoad` assertion, as the prompt requires.
+- Follow-ups:
+  - Once T05 lands, wire the `validateLoad(demoScenario, ...)` assertion in `demo.test.ts` (currently a commented TODO).
+  - Tracks B & C: fixtures (`@/fixtures/demo`) are ready — ping them once this is on `main`.

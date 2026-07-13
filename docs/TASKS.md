@@ -8,7 +8,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 |---|---|---|---|---|---|---|
 | T01 | Scaffold, tooling, CI, Vercel deploy | C | ivan-mitovski | — | [T01](prompts/T01-scaffold-and-deploy.md) | done |
 | T02 | Domain types, vehicle & cargo catalog, config | A | ivan-mitovski | — | [T02](prompts/T02-domain-types-and-data.md) | review |
-| T03 | Seeded RNG + demo fixtures | A | — | T02 | [T03](prompts/T03-rng-and-fixtures.md) | todo |
+| T03 | Seeded RNG + demo fixtures | A | ivan-mitovski | T02 | [T03](prompts/T03-rng-and-fixtures.md) | done |
 | T04 | Scenario generator | A | — | T02, T03 | [T04](prompts/T04-scenario-generator.md) | todo |
 | T05 | Geometry & constraint validation | A | — | T02 | [T05](prompts/T05-validation-core.md) | todo |
 | T06 | Placement heuristic (single trip) | A | — | T03, T05 | [T06](prompts/T06-placement-heuristic.md) | todo |
