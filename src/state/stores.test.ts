@@ -125,4 +125,36 @@ describe('optimizationStore.run (fake worker client)', () => {
     expect(opt.status).toBe('idle')
     expect(opt.result).toBeNull()
   })
+
+  it('a failing run maps to status error with the message, and re-run recovers', async () => {
+    useScenarioStore.getState().generate()
+    const scenario = useScenarioStore.getState().scenario!
+
+    // Client whose first run rejects like a worker failure would.
+    let calls = 0
+    const fake = createFakeOptimizerClient()
+    setOptimizerClient({
+      run: (...args) =>
+        ++calls === 1 ? Promise.reject(new Error('worker exploded')) : fake.run(...args),
+      cancel: fake.cancel,
+    })
+
+    useOptimizationStore.getState().run(scenario)
+    await vi.runAllTimersAsync()
+
+    let opt = useOptimizationStore.getState()
+    expect(opt.status).toBe('error')
+    expect(opt.error).toBe('worker exploded')
+    expect(opt.progress).toBeNull()
+    expect(opt.result).toBeNull()
+
+    // Retry goes through the normal happy path.
+    useOptimizationStore.getState().run(scenario)
+    await vi.runAllTimersAsync()
+
+    opt = useOptimizationStore.getState()
+    expect(opt.status).toBe('done')
+    expect(opt.error).toBeNull()
+    expect(opt.result).not.toBeNull()
+  })
 })
