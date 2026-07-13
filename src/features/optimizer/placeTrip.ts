@@ -27,6 +27,16 @@ export type TripPlanInput = {
   shops: Shop[]
   vehicle: VehicleDefinition
   config: OptimizerConfig
+  /**
+   * Optional per-item hook (added for T07). Invoked once after each item in the
+   * insertion sequence is processed — placed or not — with the 1-based `index`
+   * and the sequence `total`. Returning a truthy value aborts the remaining
+   * items: they are returned in `unplaced` with reason `no-valid-placement` and
+   * detail `'time-limit'`. T07 uses this both to emit progress and to enforce
+   * the safety time limit. Left undefined, `planSingleTrip` behaves exactly as
+   * before (no abort, no callback overhead).
+   */
+  onItemPlaced?: (progress: { index: number; total: number }) => boolean | void
 }
 
 export type TripPlanOutput = {
@@ -78,7 +88,7 @@ function doorOpeningCenter(door: VehicleDoor, space: VehicleDefinition['cargoSpa
 type Scored = { box: PlacedBox; rotationY: 0 | 90; score: number }
 
 export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
-  const { items, shops, vehicle, config } = input
+  const { items, shops, vehicle, config, onItemPlaced } = input
   const space = vehicle.cargoSpace
   const diagonal = Math.hypot(space.width, space.height, space.depth)
 
@@ -136,7 +146,8 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
   let projRight = 0
   let loadingOrder = 0
 
-  for (const item of sequence) {
+  for (let i = 0; i < sequence.length; i++) {
+    const item = sequence[i]
     const template = getTemplate(item.templateId)
     const side = doorSideByItem.get(item.id)!
     const door = vehicle.doors.find((d) => d.side === side)!
@@ -189,29 +200,43 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
     if (best === null) {
       const { reason, detail } = classifyUnplaced(template, currentWeightKg, seenCodes, vehicle)
       unplaced.push({ cargoId: item.id, shopId: item.shopId, reason, detail })
-      continue
+    } else {
+      // Commit the best placement.
+      loadingOrder += 1
+      placements.push({
+        cargoId: item.id,
+        position: best.box.min,
+        rotationY: best.rotationY,
+        loadingOrder,
+        assignedDoor: side,
+      })
+      placed.push(best.box)
+      currentWeightKg += best.box.weightKg
+      const [l, r] = projectLeftRight(best.box, space.width)
+      projLeft += l
+      projRight += r
+      candidatePoints = updateCandidatePoints(
+        candidatePoints,
+        best.box,
+        placed,
+        config.candidatePointCap,
+      )
     }
 
-    // Commit the best placement.
-    loadingOrder += 1
-    placements.push({
-      cargoId: item.id,
-      position: best.box.min,
-      rotationY: best.rotationY,
-      loadingOrder,
-      assignedDoor: side,
-    })
-    placed.push(best.box)
-    currentWeightKg += best.box.weightKg
-    const [l, r] = projectLeftRight(best.box, space.width)
-    projLeft += l
-    projRight += r
-    candidatePoints = updateCandidatePoints(
-      candidatePoints,
-      best.box,
-      placed,
-      config.candidatePointCap,
-    )
+    // Per-item hook (T07): progress + safety-time-limit abort. When it asks to
+    // stop, the untouched tail of the sequence is returned as time-limited so
+    // the multi-trip planner can mark those items and finish with best-so-far.
+    if (onItemPlaced && onItemPlaced({ index: i + 1, total: sequence.length })) {
+      for (let j = i + 1; j < sequence.length; j++) {
+        unplaced.push({
+          cargoId: sequence[j].id,
+          shopId: sequence[j].shopId,
+          reason: 'no-valid-placement',
+          detail: 'time-limit',
+        })
+      }
+      break
+    }
   }
 
   return { placements, unplaced }

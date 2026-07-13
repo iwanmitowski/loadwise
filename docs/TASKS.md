@@ -12,7 +12,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T04 | Scenario generator | A | ivan-mitovski | T02, T03 | [T04](prompts/T04-scenario-generator.md) | done |
 | T05 | Geometry & constraint validation | A | ivan-mitovski | T02 | [T05](prompts/T05-validation-core.md) | done |
 | T06 | Placement heuristic (single trip) | A | ivan-mitovski | T03, T05 | [T06](prompts/T06-placement-heuristic.md) | done |
-| T07 | Multi-trip planner | A | — | T06 | [T07](prompts/T07-multi-trip-planner.md) | todo |
+| T07 | Multi-trip planner | A | ivan-mitovski | T06 | [T07](prompts/T07-multi-trip-planner.md) | done |
 | T08 | Metrics, warnings, report data | A | — | T07 | [T08](prompts/T08-metrics-and-warnings.md) | todo |
 | T09 | Zustand stores + app shell | C | — | T01, T02 | [T09](prompts/T09-stores-and-app-shell.md) | todo |
 | T10 | Scenario Setup & Planning screens | C | — | T09 | [T10](prompts/T10-setup-and-planning-screens.md) | todo |
