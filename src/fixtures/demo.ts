@@ -9,12 +9,14 @@
 //   z 460–540 → shop-2 "Hop Cellar"  (deliveryOrder 2)
 //   z 540–620 → shop-1 "Metro Market"(deliveryOrder 3, unloaded last)
 
+import { DEFAULT_OPTIMIZER_CONFIG } from '@/features/optimizer/config'
+import { buildTripMetrics } from '@/features/reports/metrics'
+import { overallScore } from '@/features/reports/score'
 import { buildScenarioVehicle } from '@/features/vehicles/vehicles'
 import type {
   CargoItem,
   CargoPlacement,
   DeliveryStop,
-  OptimizationMetrics,
   OptimizationResult,
   Scenario,
   Shop,
@@ -112,26 +114,15 @@ const stops: DeliveryStop[] = [
   { shopId: 'shop-1', stopNumber: 3, door: 'rear' },
 ]
 
-// Metrics: totalWeightKg and utilizations are computed by hand from the layout;
-// the balance/quality figures are plausible hand-picked placeholders (this is a
-// fixture, not optimizer output). See T03 prompt.
-const metrics: OptimizationMetrics = {
-  requestedUnits: 10,
-  loadedUnits: 9,
-  deferredUnits: 1,
-  totalWeightKg: 1482,
-  weightUtilization: 0.3, // 1482 / 5000 ≈ 0.296
-  usedVolumeCm3: 5_228_000,
-  volumeUtilization: 0.15, // 5,228,000 / 34,224,000 ≈ 0.153
-  emptyVolumeCm3: 28_996_000, // 34,224,000 − 5,228,000
-  leftRightBalance: 0.62,
-  frontRearBalance: 0.71,
-  blockedCargoCount: 0,
-  extraUnloadingMoves: 0,
-  splitShopIds: [],
-  constraintViolations: 0,
-  overallScore: 78,
-}
+// Metrics are now computed from the layout by T08's `buildTripMetrics` — no more
+// hand-picked balance/quality placeholders. The 10 requested units break down as
+// 9 placed + 1 deferred (`requestedUnitsForTrip = 10`).
+const metrics = buildTripMetrics(
+  { placements, deferredCargo, stops },
+  demoScenario,
+  10,
+  DEFAULT_OPTIMIZER_CONFIG,
+)
 
 export const demoResult: OptimizationResult = {
   seed: 'demo',
@@ -150,10 +141,10 @@ export const demoResult: OptimizationResult = {
   warnings: [
     {
       code: 'deferred-cargo',
-      message: '1 beverage pallet moved to a later trip',
+      message: '1 item(s) moved to trip 2.',
       tripId: 'trip-1',
     },
   ],
-  overallScore: 78,
+  overallScore: overallScore([metrics], []),
   elapsedMs: 0,
 }
