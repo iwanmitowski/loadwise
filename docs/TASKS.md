@@ -10,7 +10,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T02 | Domain types, vehicle & cargo catalog, config | A | ivan-mitovski | — | [T02](prompts/T02-domain-types-and-data.md) | review |
 | T03 | Seeded RNG + demo fixtures | A | ivan-mitovski | T02 | [T03](prompts/T03-rng-and-fixtures.md) | done |
 | T04 | Scenario generator | A | ivan-mitovski | T02, T03 | [T04](prompts/T04-scenario-generator.md) | done |
-| T05 | Geometry & constraint validation | A | — | T02 | [T05](prompts/T05-validation-core.md) | todo |
+| T05 | Geometry & constraint validation | A | ivan-mitovski | T02 | [T05](prompts/T05-validation-core.md) | done |
 | T06 | Placement heuristic (single trip) | A | — | T03, T05 | [T06](prompts/T06-placement-heuristic.md) | todo |
 | T07 | Multi-trip planner | A | — | T06 | [T07](prompts/T07-multi-trip-planner.md) | todo |
 | T08 | Metrics, warnings, report data | A | — | T07 | [T08](prompts/T08-metrics-and-warnings.md) | todo |

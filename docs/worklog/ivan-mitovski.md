@@ -50,3 +50,18 @@
   - `pickDoor` returns the *config's* chosen side (`left`/`right`) with prob 0.4 else `rear`; `none` → always `rear`. Verified in a distribution test (never emits the opposite side).
 - Follow-ups:
   - None. Generator is self-contained; T06 placement heuristic will consume `Scenario.shops[].requestedCargo`.
+
+## [2026-07-13 22:40] T05 — Geometry & constraint validation core
+- Dev: ivan-mitovski · Model: Opus 4.8 (1M) · Branch: feat/T05-validation-core
+- Done: implemented the pure geometry/constraint core in `src/features/optimizer/` — `geometry.ts` (`PlacedBox`, `toPlacedBox`, `boxesOverlap`, `insideVehicle`, `footprintOverlapArea`, `fitsThroughDoor` + `boxTop`/`baseArea` helpers), `support.ts` (`computeSupport`, `directLoadOnSupporter` with proportional weight attribution), `validate.ts` (`ConstraintViolation`, `validateCandidate` hot path, `validateLoad` full re-check). All 8 rules enforced + tested both directions; wired the T03 fixture `validateLoad` assertion in `demo.test.ts` (replaced the TODO marker). 44 new tests. typecheck + lint + test all green (72 total).
+- Files: src/features/optimizer/{geometry,support,validate}.ts, src/features/optimizer/{geometry,support,validate}.test.ts, src/fixtures/demo.test.ts, docs/TASKS.md
+- Decisions/deviations:
+  - **Duplicate cargoId → reported under `'overlap'`.** The contract's `ConstraintViolation.code` union (fixed by the prompt) has no dedicated duplicate code, and adding one is a `src/types`-adjacent contract change I avoided. `validateLoad` detects a cargoId placed twice and emits an `overlap` violation with an explicit `"placed more than once"` detail. Faithful to "catches duplicate cargoIds" without touching the type union.
+  - **Rule 7 weight attribution:** a resting box's weight is split across its supporters proportional to each contact area, normalized by the box's *total* contact area (so full weight is conserved across supporters, not diluted by base area). Matches "proportional to contact area" and gives the expected 50/50 on two equal supporters. Direct load only — no transitive propagation.
+  - **`computeSupport` supporters** are boxes with top face flush at `box.min.y` **and** non-zero footprint overlap (a same-height neighbour with no overlap isn't a supporter). Consistent with the ratio sum and the weight/stackable checks.
+  - **`validateCandidate` returns all violations** (no short-circuit) but orders checks cheapest-first (bounds → overlap → payload → support chain); callers use `.length === 0`. Door-fit is deliberately excluded from the hot path (rule 8) and only checked in `validateLoad` as the self-check against a bad T06/T07 door assignment.
+  - Support-ratio uses exact float division vs `config.supportThreshold` (no epsilon, per "exact comparisons"); the 70%/69% test constructs integer areas so the boundary is exact.
+  - Test note: rule-7 uses a synthetic `weightKg` on a `PlacedBox` literal to isolate supporter-overweight — the real cargo templates can't overload a supporter with a single fully-supported candidate (heavy items all have large footprints), so a unit-level construction is the clean way to exercise the check.
+- Follow-ups:
+  - T06/T07 own door assignment; `validateLoad` rule 8 will flag any placement whose `assignedDoor` can't pass its opening in either rotation.
+  - Unknown cargoIds in a placement list (not requested by any shop in the scenario) are silently skipped by `validateLoad` — acceptable for MVP; revisit if T18 needs it surfaced.
