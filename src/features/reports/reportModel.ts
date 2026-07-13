@@ -14,23 +14,15 @@ import type {
   VehicleId,
 } from '@/types'
 import { cargoShopMap } from './metrics'
+import { SHOP_PALETTE } from '@/utils/shopColors'
 
 /**
- * Deterministic shop colors, assigned by the shop's index in `scenario.shops`
- * (generation order). Eight distinct hues cover the 3–8 shop range; the modulo
- * is a safety net, not an expected path. Kept here because this is the first
- * place colors are needed — Track B's 3D scene resolves the same list.
+ * Shop colors — single source of truth is `@/utils/shopColors` (T09), shared by
+ * the 3D scene, the report legend, and any per-shop UI. Assigned here by the
+ * shop's index in `scenario.shops` (generation order), which equals id-sorted
+ * order for generated scenarios. Re-exported for existing consumers/tests.
  */
-export const SHOP_PALETTE = [
-  '#2563eb', // blue
-  '#dc2626', // red
-  '#16a34a', // green
-  '#d97706', // amber
-  '#9333ea', // purple
-  '#0891b2', // cyan
-  '#db2777', // pink
-  '#65a30d', // lime
-] as const
+export { SHOP_PALETTE }
 
 export type ShopLegendEntry = {
   shopId: string
