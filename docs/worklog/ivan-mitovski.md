@@ -39,3 +39,14 @@
 - Follow-ups:
   - Once T05 lands, wire the `validateLoad(demoScenario, ...)` assertion in `demo.test.ts` (currently a commented TODO).
   - Tracks B & C: fixtures (`@/fixtures/demo`) are ready — ping them once this is on `main`.
+
+## [2026-07-13 22:22] T04 — Scenario generator
+- Dev: ivan-mitovski · Model: Opus 4.8 (1M) · Branch: feat/T04-scenario-generator
+- Done: implemented pure/deterministic `generateScenario` in `src/features/scenario/generate.ts` — one `createRng(seed)` threaded through a documented single-pass call order (shuffle delivery orders → per shop: type, name, door, cargo). Encoded the quantity+mix table, name pools, clamp bounds, and the side-door/zero-cargo probabilities as data in `profiles.ts` (no per-type branching in the generator). 14 new tests (deep-equal determinism across seeds incl. empty/unicode, seed variance, shopCount respected + clamped to 3–8, deliveryOrder permutation, side-door preference distribution, deterministic cargo IDs, beverage-mix dominance over ~400 seeds, zero-cargo shop within 200 seeds). typecheck + lint + test all green (52 total).
+- Files: src/features/scenario/generate.ts, src/features/scenario/profiles.ts, src/features/scenario/generate.test.ts, docs/TASKS.md
+- Decisions/deviations:
+  - Cargo mix encoded with **zero-weight templates omitted** from each type's `mix[]` (a 0 weight is never picked, so listing it would be dead data). Weights within a mix sum to 1; `weightedPick` samples `rng.next()` in `[0,1)` with a last-entry fallback for the float-rounding edge.
+  - Generation call order is load-bearing and documented in the `generateScenario` JSDoc: delivery-order shuffle first (top of stream), then per-shop type → name → door → cargo. Zero-cargo roll happens before the quantity roll and short-circuits it, so no `int()` is consumed for empty shops.
+  - `pickDoor` returns the *config's* chosen side (`left`/`right`) with prob 0.4 else `rear`; `none` → always `rear`. Verified in a distribution test (never emits the opposite side).
+- Follow-ups:
+  - None. Generator is self-contained; T06 placement heuristic will consume `Scenario.shops[].requestedCargo`.
