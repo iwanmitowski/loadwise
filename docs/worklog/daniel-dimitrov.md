@@ -1,5 +1,17 @@
 # Worklog — Daniel Dimitrov
 
+## [2026-07-14 01:00] T11 — Optimizer Web Worker + client
+- Dev: daniel-dimitrov · Model: Fable 5 · Branch: feat/T11-optimizer-worker
+- Done: `src/workers/optimizer.worker.ts` (Vite module worker running the real `optimize()`, progress throttled to ≤ ~10 msgs/s, errors mapped to `OptimizerError`) and `src/workers/optimizerClient.ts` (`createOptimizerClient` — requestId per run via `crypto.randomUUID`, stale responses ignored, cancel = `worker.terminate()` + `CancelledError` + lazy respawn, second `run()` auto-cancels the first, `worker.onerror` rejects and replaces the worker). Rewired `optimizationStore.run/cancel/reset` to the client, deleting the T09 setTimeout scaffold. 8 client unit tests + updated store/App/Planning tests; 172 tests green. Verified `vite build` emits a standalone worker chunk and `vite preview` serves it (curl-level check).
+- Files: src/workers/optimizer.worker.ts, src/workers/optimizerClient.ts(+test), src/state/optimizationStore.ts, src/test/fakeOptimizerClient.ts, src/state/stores.test.ts, src/App.test.tsx, src/components/screens/ScreenPlanning.test.tsx, docs/TASKS.md, docs/prompts/T11-optimizer-worker.md
+- Decisions/deviations:
+  - **Mock phase skipped**: T07 was already merged when this task started, so the worker wires the real `optimize` directly — no `mockOptimize.ts` was ever needed. Prompt file annotated. Effectively Phase 1+2 landed together; **end-to-end optimize is now live (Milestone M2) — Track A please sanity-check real seeds through the UI.**
+  - `createOptimizerClient(spawn?)` takes an injectable worker factory — this is the "message handling factored pure" requirement (plus an exported pure `handleWorkerMessage`); tests drive the full protocol without a real Worker.
+  - Store keeps a `status !== 'running'` guard in then/catch replacing the old runToken: a settle racing a same-tick cancel/reset must not overwrite state.
+  - jsdom suites inject `src/test/fakeOptimizerClient.ts` via new `setOptimizerClient()` seam (jsdom has no Worker); UI test timer flushes became `runAllTimersAsync` since the client settles through microtasks.
+  - Manual browser click-through (real progress bar, cancel mid-run, rapid double-run) still owed a human pass — noted in the PR; T19 Playwright will automate it.
+- Follow-ups: worker progress percent is coarse for tiny scenarios (optimize emits ~1 msg/trip); fine for demo sizes. Store could expose `elapsedMs` in the progress UI later (T16 shows it in the report).
+
 ## [2026-07-14 00:30] T10 — Scenario Setup & Planning screens
 - Dev: daniel-dimitrov · Model: Fable 5 · Branch: feat/T10-setup-planning-screens
 - Done: real Setup screen (3 vehicle cards with proportional SVG side-view schematics, side-door radio group with top-view diagrams, shop-count slider 3–8, seed field + randomize + helper text, disabled "Load demo" placeholder) and Planning View (header with vehicle summary + copyable seed badge, shop cards in delivery order with color dot / type badge / stop number / door chip / template × count chips / per-shop weight+volume, totals bar with weight & volume capacity bars that go amber past 100%, Optimize with progress bar + Cancel, inline error alert with Retry, Regenerate and Back). Added `src/utils/format.ts` + RTL tests for both screens; 160 tests green.
