@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_OPTIMIZER_CONFIG } from '@/features/optimizer/config'
+import { validateLoad } from '@/features/optimizer/validate'
 import { demoResult, demoScenario } from './demo'
 
 describe('demoScenario', () => {
@@ -40,6 +42,12 @@ describe('demoResult', () => {
     ])
   })
 
-  // TODO(T05): once validateLoad exists, assert the fixture passes it:
-  //   expect(validateLoad(demoScenario, demoResult.trips[0].placements).ok).toBe(true)
+  it('passes full constraint validation (validateLoad, T05)', () => {
+    const violations = validateLoad(
+      demoResult.trips[0].placements,
+      demoScenario,
+      DEFAULT_OPTIMIZER_CONFIG,
+    )
+    expect(violations).toEqual([])
+  })
 })
