@@ -8,11 +8,15 @@
 // result in every field except `elapsedMs`. No React / Three imports — this runs
 // inside the optimizer Web Worker (T11).
 //
-// Metrics/warnings are T08's job. Until T08 lands this emits placeholder metrics
-// (the counts we already know, zeros elsewhere) behind T08's `OptimizationMetrics`
-// interface; `time-limit` is the one warning T07 owns (idea.md warnings table).
+// Metrics, warnings and the overall score come from T08's report layer
+// (`src/features/reports/`): each trip is metricked as it is assembled, then the
+// finished result is scored and warned in one pass. `time-limit` is the one
+// warning T07 owns (idea.md warnings table); T08's `buildWarnings` passes it through.
 
 import { getTemplate, itemDimensions } from '@/features/cargo/templates'
+import { buildTripMetrics } from '@/features/reports/metrics'
+import { overallScore } from '@/features/reports/score'
+import { buildWarnings } from '@/features/reports/warnings'
 import type {
   CargoItem,
   CargoPlacement,
@@ -20,7 +24,6 @@ import type {
   DeliveryTrip,
   DoorSide,
   Dimensions,
-  OptimizationMetrics,
   OptimizationResult,
   OptimizationWarning,
   OptimizerConfig,
@@ -110,13 +113,14 @@ export function optimize(
     if (timeLimitHit) {
       if (plan.placements.length > 0) {
         const placements = stamp(plan.placements, tripId)
+        const stops = buildStops(placements)
         trips.push({
           id: tripId,
           tripNumber,
-          stops: buildStops(placements),
+          stops,
           placements,
           deferredCargo: [],
-          metrics: placeholderMetrics(presented, placements.length, 0, []),
+          metrics: buildTripMetrics({ placements, deferredCargo: [], stops }, scenario, presented, config),
         })
       }
       for (const u of plan.unplaced) {
@@ -180,7 +184,6 @@ export function optimize(
         if (stillPlacing.length > 0) deferShopIds.add(shop.id)
       }
     }
-    const keptSplitShopIds = splitShopIds.filter((sid) => !deferShopIds.has(sid))
 
     // --- Steps 5-7: assemble this trip and gather next-trip input. ---
     const keptPlacements = plan.placements.filter(
@@ -217,13 +220,14 @@ export function optimize(
       }
     }
 
+    const stops = buildStops(placements)
     trips.push({
       id: tripId,
       tripNumber,
-      stops: buildStops(placements),
+      stops,
       placements,
       deferredCargo,
-      metrics: placeholderMetrics(presented, placements.length, deferredCargo.length, keptSplitShopIds),
+      metrics: buildTripMetrics({ placements, deferredCargo, stops }, scenario, presented, config),
     })
 
     placedSoFar += placements.length
@@ -242,13 +246,26 @@ export function optimize(
 
   onProgress?.(100, 'Done')
 
-  return {
+  // T08: score the finished result and generate its warnings. `warnings` holds
+  // only the runtime `time-limit` notice at this point; `buildWarnings` passes it
+  // through and adds every metric-derived warning.
+  const preliminary: OptimizationResult = {
     seed: scenario.config.seed,
     vehicleId: vehicle.id,
     trips,
     unplaceableCargo: unplaceable,
     warnings,
-    overallScore: 0, // T08 computes this.
+    overallScore: 0,
+    elapsedMs: 0,
+  }
+
+  return {
+    ...preliminary,
+    warnings: buildWarnings(preliminary, scenario),
+    overallScore: overallScore(
+      trips.map((t) => t.metrics),
+      unplaceable,
+    ),
     elapsedMs: clock() - startedAt, // Documented nondeterminism (metadata only).
   }
 }
@@ -344,34 +361,4 @@ function pct(done: number, total: number): number {
   if (total <= 0) return 0
   const v = Math.round((done / total) * 100)
   return v < 0 ? 0 : v > 99 ? 99 : v
-}
-
-/**
- * Placeholder metrics until T08's `buildTripMetrics` lands. Fills only the counts
- * T07 already knows (requested / loaded / deferred / splitShopIds) and zeroes the
- * rest, matching T08's `OptimizationMetrics` shape so the swap is drop-in.
- */
-function placeholderMetrics(
-  requestedUnits: number,
-  loadedUnits: number,
-  deferredUnits: number,
-  splitShopIds: string[],
-): OptimizationMetrics {
-  return {
-    requestedUnits,
-    loadedUnits,
-    deferredUnits,
-    totalWeightKg: 0,
-    weightUtilization: 0,
-    usedVolumeCm3: 0,
-    volumeUtilization: 0,
-    emptyVolumeCm3: 0,
-    leftRightBalance: 0,
-    frontRearBalance: 0,
-    blockedCargoCount: 0,
-    extraUnloadingMoves: 0,
-    splitShopIds,
-    constraintViolations: 0,
-    overallScore: 0,
-  }
 }
