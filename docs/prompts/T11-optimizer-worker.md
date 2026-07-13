@@ -26,7 +26,7 @@ export function createOptimizerClient(): OptimizerClient;
 - **requestId**: `crypto.randomUUID()` per run (UI layer — allowed). Client ignores any message whose requestId ≠ current run (stale-response guard, idea.md requirement).
 - **Cancellation = terminate**: `cancel()` calls `worker.terminate()`, rejects the in-flight promise with a `CancelledError`, and lazily spawns a fresh worker on next run. Simplest reliable cancel — no cooperative flags.
 - Only ONE run in flight: a new `run()` while running auto-cancels the previous.
-- **Mock phase**: `src/workers/mockOptimize.ts` — takes a scenario, emits fake progress over ~2s (5 steps), returns `demoResult` from fixtures re-stamped with the request's seed. Worker imports `mockOptimize` behind a single `const optimizeFn = mockOptimize` line — the T07 swap changes exactly that line to the real `optimize` (leave a `TODO(T07)` comment).
+- **Mock phase**: `src/workers/mockOptimize.ts` — takes a scenario, emits fake progress over ~2s (5 steps), returns `demoResult` from fixtures re-stamped with the request's seed. Worker imports `mockOptimize` behind a single `const optimizeFn = mockOptimize` line — the T07 swap changes exactly that line to the real `optimize` (leave a `TODO(T07)` comment). *(As implemented: T07 had already merged when T11 started, so the mock phase was skipped and the worker wires the real `optimize` directly. jsdom tests use `src/test/fakeOptimizerClient.ts` instead — same role as the mock, but test-only.)*
 - Progress throttling: forward at most ~10 messages/s to the client.
 - Errors inside the worker → `OptimizerError` message; client rejects; store maps to `status: 'error'`.
 - Wire `optimizationStore.run/cancel` (T09) to this client, replacing its setTimeout scaffolding.

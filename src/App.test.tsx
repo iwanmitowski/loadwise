@@ -2,24 +2,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import App from './App'
+import { createFakeOptimizerClient } from '@/test/fakeOptimizerClient'
 import { useScenarioStore } from '@/state/scenarioStore'
-import { useOptimizationStore } from '@/state/optimizationStore'
+import { setOptimizerClient, useOptimizationStore } from '@/state/optimizationStore'
 import { useUiStore } from '@/state/uiStore'
 
 // Reset the singleton stores so the shell starts from its initial state.
+// jsdom has no Worker — swap the optimizer client for the timer-based fake.
 beforeEach(() => {
+  setOptimizerClient(createFakeOptimizerClient())
   useOptimizationStore.getState().reset()
   useScenarioStore.setState({ scenario: null })
   useUiStore.getState().resetForNewScenario()
   vi.useFakeTimers()
 })
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  setOptimizerClient(null)
+  vi.useRealTimers()
+})
 
 const stepButton = (label: string) =>
   within(screen.getByRole('navigation')).getByRole('button', { name: label })
 
 describe('App shell — happy path', () => {
-  it('gates the stepper and clicks through generate → optimize → simulation', () => {
+  it('gates the stepper and clicks through generate → optimize → simulation', async () => {
     render(<App />)
 
     // Setup screen shown; downstream steps disabled until prerequisites exist.
@@ -35,7 +41,9 @@ describe('App shell — happy path', () => {
     // Optimize → fake worker resolves → result present, Simulation/Report
     // unlock, and Planning auto-advances to the simulation placeholder.
     fireEvent.click(screen.getByRole('button', { name: 'Optimize' }))
-    act(() => vi.runAllTimers())
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
 
     expect(useOptimizationStore.getState().result).not.toBeNull()
     expect(stepButton('Simulation')).toBeEnabled()

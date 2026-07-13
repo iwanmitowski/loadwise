@@ -1,6 +1,11 @@
 import { create } from 'zustand'
+import { DEFAULT_OPTIMIZER_CONFIG } from '@/features/optimizer/config'
 import type { OptimizationResult, Scenario } from '@/types'
-import { demoResult } from '@/fixtures/demo'
+import {
+  CancelledError,
+  createOptimizerClient,
+  type OptimizerClient,
+} from '@/workers/optimizerClient'
 import { useUiStore } from './uiStore'
 
 export type OptimizationStatus =
@@ -23,51 +28,63 @@ export type OptimizationState = {
   reset(): void
 }
 
-// TODO(T11): replace this fixture-driven scaffold with the real optimizer worker
-// client. Until then, `run` fakes a short async job and returns the demo result
-// so the setup → planning → simulation → report flow is clickable end to end.
-const FAKE_RUN_MS = 400
+// Created lazily so importing the store never touches `Worker` (jsdom has
+// none); jsdom tests swap in a fake via setOptimizerClient.
+let client: OptimizerClient | null = null
+const ensureClient = (): OptimizerClient => (client ??= createOptimizerClient())
 
-export const useOptimizationStore = create<OptimizationState>((set, get) => {
-  // Token guards against a stale timer resolving after cancel()/reset().
-  let runToken = 0
+/** Test seam: replace the worker-backed client. Pass null to restore default. */
+export function setOptimizerClient(next: OptimizerClient | null): void {
+  client = next
+}
 
-  const finish = (token: number, scenario: Scenario) => {
-    if (token !== runToken || get().status !== 'running') return
-    const result: OptimizationResult = { ...demoResult, seed: scenario.config.seed }
-    set({ status: 'done', progress: { percent: 100, stage: 'Done' }, result })
-    // selectedTripId default: first trip when a result arrives.
-    useUiStore.getState().setSelectedTrip(result.trips[0]?.id ?? null)
-  }
+export const useOptimizationStore = create<OptimizationState>((set, get) => ({
+  status: 'idle',
+  progress: null,
+  result: null,
+  error: null,
 
-  return {
-    status: 'idle',
-    progress: null,
-    result: null,
-    error: null,
-
-    run: (scenario) => {
-      const token = ++runToken
-      set({
-        status: 'running',
-        progress: { percent: 0, stage: 'Optimizing…' },
-        result: null,
-        error: null,
+  run: (scenario) => {
+    // The client auto-cancels any in-flight run (its promise rejects with
+    // CancelledError and is swallowed below), so re-running is always safe.
+    set({
+      status: 'running',
+      progress: { percent: 0, stage: 'Optimizing…' },
+      result: null,
+      error: null,
+    })
+    ensureClient()
+      .run(scenario, DEFAULT_OPTIMIZER_CONFIG, (progress) => {
+        if (get().status === 'running') set({ progress })
       })
-      // TODO(T11): delegate to the worker client; this setTimeout is scaffolding.
-      setTimeout(() => finish(token, scenario), FAKE_RUN_MS)
-    },
+      .then((result) => {
+        // Settlement races: if cancel()/reset() flipped the status in the gap
+        // between the promise settling and this microtask, drop the result.
+        if (get().status !== 'running') return
+        set({ status: 'done', progress: { percent: 100, stage: 'Done' }, result })
+        // selectedTripId default: first trip when a result arrives.
+        useUiStore.getState().setSelectedTrip(result.trips[0]?.id ?? null)
+      })
+      .catch((error: unknown) => {
+        if (error instanceof CancelledError) return // cancel()/reset() set state
+        if (get().status !== 'running') return
+        set({
+          status: 'error',
+          progress: null,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+  },
 
-    cancel: () => {
-      runToken++
-      if (get().status === 'running') {
-        set({ status: 'cancelled', progress: null })
-      }
-    },
+  cancel: () => {
+    client?.cancel()
+    if (get().status === 'running') {
+      set({ status: 'cancelled', progress: null })
+    }
+  },
 
-    reset: () => {
-      runToken++
-      set({ status: 'idle', progress: null, result: null, error: null })
-    },
-  }
-})
+  reset: () => {
+    client?.cancel()
+    set({ status: 'idle', progress: null, result: null, error: null })
+  },
+}))
