@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { ScreenPlanning } from './ScreenPlanning'
 import { demoScenario } from '@/fixtures/demo'
-import { useOptimizationStore } from '@/state/optimizationStore'
+import { createFakeOptimizerClient } from '@/test/fakeOptimizerClient'
+import { setOptimizerClient, useOptimizationStore } from '@/state/optimizationStore'
 import { useScenarioStore } from '@/state/scenarioStore'
 import { useUiStore } from '@/state/uiStore'
 import type { Scenario, Shop } from '@/types'
@@ -23,11 +24,14 @@ const fixtureScenario: Scenario = {
 }
 
 beforeEach(() => {
+  // jsdom has no Worker — swap the optimizer client for the timer-based fake.
+  setOptimizerClient(createFakeOptimizerClient())
   useOptimizationStore.getState().reset()
   useScenarioStore.setState({ scenario: fixtureScenario })
   useUiStore.getState().resetForNewScenario()
   useUiStore.getState().goTo('planning')
 })
+afterEach(() => setOptimizerClient(null))
 
 describe('ScreenPlanning', () => {
   it('renders shop cards in delivery order, including the zero-cargo shop', () => {
@@ -70,7 +74,7 @@ describe('ScreenPlanning', () => {
     beforeEach(() => vi.useFakeTimers())
     afterEach(() => vi.useRealTimers())
 
-    it('shows progress + cancel while running, then advances to simulation', () => {
+    it('shows progress + cancel while running, then advances to simulation', async () => {
       render(<ScreenPlanning />)
 
       fireEvent.click(screen.getByRole('button', { name: 'Optimize' }))
@@ -78,18 +82,22 @@ describe('ScreenPlanning', () => {
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Optimize' })).toBeDisabled()
 
-      act(() => vi.runAllTimers())
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
 
       expect(useOptimizationStore.getState().status).toBe('done')
       expect(useUiStore.getState().screen).toBe('simulation')
     })
 
-    it('cancel stops the run and stays on planning', () => {
+    it('cancel stops the run and stays on planning', async () => {
       render(<ScreenPlanning />)
 
       fireEvent.click(screen.getByRole('button', { name: 'Optimize' }))
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-      act(() => vi.runAllTimers())
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
 
       expect(useOptimizationStore.getState().status).toBe('cancelled')
       expect(useUiStore.getState().screen).toBe('planning')

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeOptimizerClient } from '@/test/fakeOptimizerClient'
 import { useScenarioStore } from './scenarioStore'
-import { useOptimizationStore } from './optimizationStore'
+import { setOptimizerClient, useOptimizationStore } from './optimizationStore'
 import { useUiStore } from './uiStore'
 
 // These stores are module singletons; reset them to a known baseline per test.
@@ -55,19 +56,26 @@ describe('scenarioStore.generate', () => {
   })
 })
 
-describe('optimizationStore.run (fixture scaffold)', () => {
-  beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
+describe('optimizationStore.run (fake worker client)', () => {
+  beforeEach(() => {
+    setOptimizerClient(createFakeOptimizerClient())
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    setOptimizerClient(null)
+    vi.useRealTimers()
+  })
 
-  it('runs to done and exposes a result + selected trip', () => {
+  it('runs to done and exposes a result + selected trip', async () => {
     useScenarioStore.getState().setConfig({ seed: 'run-seed' })
     useScenarioStore.getState().generate()
     const scenario = useScenarioStore.getState().scenario!
 
     useOptimizationStore.getState().run(scenario)
     expect(useOptimizationStore.getState().status).toBe('running')
+    expect(useOptimizationStore.getState().progress).not.toBeNull()
 
-    vi.runAllTimers()
+    await vi.runAllTimersAsync()
 
     const opt = useOptimizationStore.getState()
     expect(opt.status).toBe('done')
@@ -77,17 +85,37 @@ describe('optimizationStore.run (fixture scaffold)', () => {
     expect(useUiStore.getState().selectedTripId).toBe(opt.result!.trips[0]!.id)
   })
 
-  it('cancel prevents a stale timer from completing', () => {
+  it('cancel rejects the in-flight run without flipping back to done', async () => {
     const scenario = (useScenarioStore.getState().generate(),
     useScenarioStore.getState().scenario!)
     useOptimizationStore.getState().run(scenario)
     useOptimizationStore.getState().cancel()
     expect(useOptimizationStore.getState().status).toBe('cancelled')
 
-    vi.runAllTimers()
-    // The pending timer must not flip a cancelled run back to done.
+    await vi.runAllTimersAsync()
+    // The cancelled run must not complete and overwrite the status.
     expect(useOptimizationStore.getState().status).toBe('cancelled')
     expect(useOptimizationStore.getState().result).toBeNull()
+  })
+
+  it('a second run supersedes the first; only the latest result lands', async () => {
+    // Build both scenarios first — generate() itself resets the optimization
+    // store, and this test wants two back-to-back run() calls.
+    useScenarioStore.getState().setConfig({ seed: 'first' })
+    useScenarioStore.getState().generate()
+    const scenario1 = useScenarioStore.getState().scenario!
+    useScenarioStore.getState().setConfig({ seed: 'second' })
+    useScenarioStore.getState().generate()
+    const scenario2 = useScenarioStore.getState().scenario!
+
+    useOptimizationStore.getState().run(scenario1)
+    useOptimizationStore.getState().run(scenario2)
+
+    await vi.runAllTimersAsync()
+
+    const opt = useOptimizationStore.getState()
+    expect(opt.status).toBe('done')
+    expect(opt.result!.seed).toBe('second')
   })
 
   it('reset returns to idle', () => {
