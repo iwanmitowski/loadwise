@@ -17,7 +17,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T09 | Zustand stores + app shell | C | — | T01, T02 | [T09](prompts/T09-stores-and-app-shell.md) | todo |
 | T10 | Scenario Setup & Planning screens | C | — | T09 | [T10](prompts/T10-setup-and-planning-screens.md) | todo |
 | T11 | Optimizer Web Worker + client | C | — | T02 (mock) → T07 (real) | [T11](prompts/T11-optimizer-worker.md) | todo |
-| T12 | Vehicle 3D scene | B | — | T01, T02 | [T12](prompts/T12-vehicle-scene.md) | todo |
+| T12 | Vehicle 3D scene | B | ivan-mitovski | T01, T02 | [T12](prompts/T12-vehicle-scene.md) | done |
 | T13 | Cargo rendering & interaction | B | — | T03, T12 | [T13](prompts/T13-cargo-rendering.md) | todo |
 | T14 | Loading animation | B | — | T13 | [T14](prompts/T14-loading-animation.md) | todo |
 | T15 | Delivery simulation | B | — | T13, T05 | [T15](prompts/T15-delivery-simulation.md) | todo |
