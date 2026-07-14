@@ -33,7 +33,8 @@ import type {
   VehicleDefinition,
 } from '@/types'
 import { type Clock, performanceClock } from '@/utils/clock'
-import { fitsThroughDoor } from './geometry'
+import { fitsThroughDoor, type PlacedBox } from './geometry'
+import { computeSupport } from './support'
 import { planSingleTrip } from './placeTrip'
 
 export type ProgressFn = (percent: number, stage: string) => void
@@ -186,16 +187,30 @@ export function optimize(
     }
 
     // --- Steps 5-7: assemble this trip and gather next-trip input. ---
-    const keptPlacements = plan.placements.filter(
-      (p) => !deferShopIds.has(shopByCargo.get(p.cargoId)!),
+    // The anti-split rule defers whole shops, but a *kept* box may have been
+    // stacked on a deferred shop's box during single-trip packing. Simply
+    // dropping the supporter would leave the box floating (support ratio 0), so
+    // cascade-defer every box that loses support once the deferred shops are gone
+    // — repeated, because removing one box can un-support the box above it. If the
+    // cascade would empty the trip, we abandon the anti-split defer for this trip
+    // instead (plan.placements is internally supported): correctness must never
+    // stall progress by producing an empty trip.
+    let effectiveDefer = deferShopIds
+    const antiSplitKept = plan.placements.filter(
+      (p) => !effectiveDefer.has(shopByCargo.get(p.cargoId)!),
     )
-    const placements = stamp(keptPlacements, tripId)
+    let cascade = deferOrphanedStacks(antiSplitKept, itemById, config)
+    if (cascade.kept.length === 0) {
+      effectiveDefer = new Set<string>()
+      cascade = { kept: plan.placements, orphaned: [] }
+    }
+    const placements = stamp(cascade.kept, tripId)
 
     const deferredCargo: UnplacedCargo[] = []
     const nextItems: CargoItem[] = []
     // T06-unplaced items (deferrable) — except those swept up by a whole-shop defer.
     for (const u of plan.unplaced) {
-      if (deferShopIds.has(u.shopId)) continue
+      if (effectiveDefer.has(u.shopId)) continue
       deferredCargo.push({
         cargoId: u.cargoId,
         shopId: u.shopId,
@@ -206,7 +221,7 @@ export function optimize(
       nextItems.push(itemById.get(u.cargoId)!)
     }
     // Whole-shop anti-split deferrals: every item the shop presented this trip.
-    for (const sid of deferShopIds) {
+    for (const sid of effectiveDefer) {
       for (const it of remaining) {
         if (it.shopId !== sid) continue
         deferredCargo.push({
@@ -218,6 +233,19 @@ export function optimize(
         })
         nextItems.push(it)
       }
+    }
+    // Cascade-orphaned boxes: their supporter was deferred, so they follow it to
+    // the next trip. (Distinct from the sets above — these were placed and kept.)
+    for (const p of cascade.orphaned) {
+      const it = itemById.get(p.cargoId)!
+      deferredCargo.push({
+        cargoId: it.id,
+        shopId: it.shopId,
+        reason: 'no-valid-placement',
+        permanent: false,
+        detail: 'Deferred: its supporting cargo moved to a later trip.',
+      })
+      nextItems.push(it)
     }
 
     const stops = buildStops(placements)
@@ -340,6 +368,48 @@ function fitsInSpace(size: Dimensions, space: Dimensions): boolean {
 /** The stop-level door for a shop: its preferred door if the vehicle has it, else rear. */
 function shopDoor(shop: Shop, vehicle: VehicleDefinition): DoorSide {
   return vehicle.doors.some((d) => d.side === shop.preferredDoor) ? shop.preferredDoor : 'rear'
+}
+
+type UntrippedPlacement = Omit<CargoPlacement, 'tripId'>
+
+/**
+ * Iteratively remove placements whose base support has dropped below the
+ * threshold against the surviving set — used after the anti-split rule strips a
+ * deferred shop's boxes out of a trip, which can leave boxes stacked on them
+ * floating. Repeats until a fixed point because removing one box can un-support
+ * the box resting on it. Floor boxes (y=0) always keep full support, so this can
+ * only ever shed stacked cargo. Returns the survivors plus the shed placements.
+ */
+function deferOrphanedStacks(
+  placements: UntrippedPlacement[],
+  itemById: Map<string, CargoItem>,
+  config: OptimizerConfig,
+): { kept: UntrippedPlacement[]; orphaned: UntrippedPlacement[] } {
+  let kept = placements
+  const orphaned: UntrippedPlacement[] = []
+  for (;;) {
+    const boxes: PlacedBox[] = kept.map((p) => {
+      const template = getTemplate(itemById.get(p.cargoId)!.templateId)
+      return {
+        cargoId: p.cargoId,
+        templateId: template.id,
+        min: p.position,
+        size: itemDimensions(template, p.rotationY),
+        weightKg: template.weightKg,
+      }
+    })
+    const badIds = new Set(
+      boxes
+        .filter(
+          (b) => b.min.y > 0 && computeSupport(b, boxes).ratio < config.supportThreshold,
+        )
+        .map((b) => b.cargoId),
+    )
+    if (badIds.size === 0) break
+    for (const p of kept) if (badIds.has(p.cargoId)) orphaned.push(p)
+    kept = kept.filter((p) => !badIds.has(p.cargoId))
+  }
+  return { kept, orphaned }
 }
 
 /** Stamp tripId + gapless per-trip loadingOrder (1..k) onto kept placements. */

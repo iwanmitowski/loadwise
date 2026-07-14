@@ -9,8 +9,11 @@ import type {
   Scenario,
   VehicleDefinition,
 } from '@/types'
+import { generateScenario } from '@/features/scenario/generate'
+import type { VehicleId } from '@/types'
 import { DEFAULT_OPTIMIZER_CONFIG as CFG } from './config'
 import { optimize } from './optimize'
+import { validateLoad } from './validate'
 
 // --- Builders -------------------------------------------------------------
 
@@ -305,5 +308,53 @@ describe('optimize — safety time limit', () => {
     const timed = result.unplaceableCargo.filter((u) => u.detail === 'time-limit')
     expect(timed).toHaveLength(4)
     expect(timed.every((u) => u.permanent && u.reason === 'no-valid-placement')).toBe(true)
+  })
+})
+
+describe('optimize — every committed trip is physically valid', () => {
+  // Regression: the anti-split rule defers a whole shop by stripping its boxes
+  // from the trip, which could leave another shop's box — packed on top of a
+  // deferred box — floating with zero support (caught in the 3D view; e.g.
+  // cargo-van seed-6 shop-3-c9 sat at y=40 on nothing). Every final trip must
+  // pass validateLoad, so no box is ever left unsupported after the fact.
+  const vehicles: VehicleId[] = ['cargo-van', 'box-truck', 'semi-trailer']
+
+  for (const vehicleId of vehicles) {
+    for (const shopCount of [3, 4, 5]) {
+      it(`${vehicleId} / ${shopCount} shops: no trip has support/overlap/bounds violations`, () => {
+        for (let s = 0; s < 20; s++) {
+          const scenario = generateScenario({
+            seed: `seed-${s}`,
+            vehicleId,
+            sideDoor: 'none',
+            shopCount,
+          })
+          const result = optimize(scenario, CFG)
+          for (const trip of result.trips) {
+            const violations = validateLoad(trip.placements, scenario, CFG)
+            expect(
+              violations,
+              `seed-${s} ${trip.id}: ${violations.map((v) => `${v.code}:${v.cargoId}`).join(', ')}`,
+            ).toEqual([])
+          }
+        }
+      })
+    }
+  }
+
+  it('regenerates support after anti-split defers a supporting shop (cargo-van seed-6)', () => {
+    const scenario = generateScenario({
+      seed: 'seed-6',
+      vehicleId: 'cargo-van',
+      sideDoor: 'none',
+      shopCount: 3,
+    })
+    const result = optimize(scenario, CFG)
+    for (const trip of result.trips) {
+      const support = validateLoad(trip.placements, scenario, CFG).filter(
+        (v) => v.code === 'insufficient-support',
+      )
+      expect(support).toEqual([])
+    }
   })
 })
