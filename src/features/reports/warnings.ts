@@ -79,15 +79,18 @@ function tripWarnings(
 
   // Imbalance: report the worse of the two axes, naming the heavier side.
   // Thresholds are asymmetric on the z axis: a REAR-heavy load (mass toward the
-  // rear door/overhang, i.e. behind the rear axle) warns earlier than a
-  // cabin-biased one, because it unloads the steering axle — worst on a lightly
-  // loaded vehicle (Directive 2014/47/EU Annex III axle-load intent; no axle
-  // geometry in the MVP, so mass-half share is the proxy).
+  // rear door/overhang, i.e. behind the rear axle) warns at 0.9, because it
+  // unloads the steering axle — worst on a lightly loaded vehicle (Directive
+  // 2014/47/EU Annex III axle-load intent; no axle geometry in the MVP, so
+  // mass-half share is the proxy). Front bias is the front-pack rule's *intent*
+  // (mass over/between the axles), so it only warns when extreme (< 0.5) on a
+  // heavily loaded vehicle (util ≥ 0.7) — light front-packed trips stay silent.
   const split = tripWeightSplit(trip, scenario)
   const rearHeavy = split.rear > split.front
-  const zThreshold = rearHeavy ? 0.9 : 0.75
   const lrTripped = m.leftRightBalance < 0.85
-  const zTripped = m.frontRearBalance < zThreshold
+  const zTripped = rearHeavy
+    ? m.frontRearBalance < 0.9
+    : m.frontRearBalance < 0.5 && m.weightUtilization >= 0.7
   if (lrTripped || zTripped) {
     out.push(imbalanceWarning(trip, scenario, lrTripped, zTripped))
   }

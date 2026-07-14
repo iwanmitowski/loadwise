@@ -147,16 +147,30 @@ describe('buildWarnings — one trigger per code', () => {
     expect(ws.find((x) => x.code === 'imbalance')).toBeUndefined()
   })
 
-  it('imbalance: front-heavy still warns below 0.75', () => {
+  it('imbalance: front-heavy warns only when extreme AND heavily loaded', () => {
     const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
-    const ws = buildWarnings(
+    // Light load (util 0.5 default): front bias is the front-pack rule working
+    // as intended — silent even at balance 0.4.
+    const silent = buildWarnings(
       makeResult([
-        makeTrip({ placements: [frontPlacement], metrics: { frontRearBalance: 0.7 } }),
+        makeTrip({ placements: [frontPlacement], metrics: { frontRearBalance: 0.4 } }),
       ]),
       scenario,
     )
-    expect(ws.find((x) => x.code === 'imbalance')?.message).toBe(
-      'The front of the load is 30% heavier than the rear.',
+    expect(silent.find((x) => x.code === 'imbalance')).toBeUndefined()
+
+    // Heavy load (util 0.8): extreme nose bias is a real axle concern — warns.
+    const warned = buildWarnings(
+      makeResult([
+        makeTrip({
+          placements: [frontPlacement],
+          metrics: { frontRearBalance: 0.4, weightUtilization: 0.8 },
+        }),
+      ]),
+      scenario,
+    )
+    expect(warned.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The front of the load is 60% heavier than the rear.',
     )
   })
 

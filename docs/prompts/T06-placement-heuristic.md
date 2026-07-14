@@ -37,7 +37,7 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput;
 **5. Validate** every (candidate × orientation) with `validateCandidate` (T05). Invalid → discard.
 
 **6. Score** each valid placement 0–1 per component, combined with `config.weights` (normalize by weight sum):
-- `deliveryOrderCompatibility`: for rear-door items, `centerZ / depth` scaled by how late the stop is — concretely `1 − |idealZ − centerZ| / depth`, where `idealZ = depth × (stopsAfterThisShop + 0.5) / stopCount` (later deliveries → deeper ideal band). For side-door items: 1 if the item's z-interval overlaps its door's z-interval, else decays with distance to the door interval (`1 − gap/depth`).
+- `deliveryOrderCompatibility`: **front-pack rule** (redesigned post-T13 for vehicle stability — see T13 worklog; originally a proportional `idealZ` band model). Rear-door items pack contiguously against the cabin wall, order-preserving: score = `faceZ / boundary` where `boundary` = min z of any already-placed LATER stop's box (else `depth`), and 0 when `faceZ > boundary` (intruding beside a later band would block its unloading). Candidate generation gained a face-flush-behind variant (`p.z − size.depth`, anchored on each placed box's min corner) so bands butt up with no gap. For side-door items: 1 if the item's z-interval overlaps its door's z-interval, else decays with distance to the door interval (`1 − gap/depth`).
 - `doorAccessibility`: 1 − normalized distance from item center to its assigned door's opening center (straight-line, normalized by vehicle diagonal).
 - `compactness`: fraction of the 3 min-faces (x=…, y=…, z-max toward cabin) touching a wall or another box (0, ⅓, ⅔, 1).
 - `floorPreference`: `1 − min.y / vehicleHeight`.

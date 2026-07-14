@@ -36,7 +36,7 @@ export function overallScore(metrics: OptimizationMetrics[], unplaceable: Unplac
 |---|---|---|
 | weight-limited | trip weightUtil ≥ 0.9 and volumeUtil < 0.7 | "Trip N reached weight capacity before volume capacity." |
 | volume-limited | volumeUtil ≥ 0.9 and weightUtil < 0.7 | "Trip N reached volume capacity before weight capacity." |
-| imbalance | LR balance < 0.85, or FR balance below an asymmetric threshold: 0.9 when rear-heavy, 0.75 when front-heavy (post-T13 stability work — rear bias unloads the steering axle). Rear-heavy + weightUtil < 0.5 appends a steering-axle note. | "The right side is 12% heavier than the left." (compute side + %) |
+| imbalance | LR balance < 0.85, or FR balance below an asymmetric threshold: 0.9 when rear-heavy (rear bias unloads the steering axle); when front-heavy only < 0.5 AND weightUtil ≥ 0.7 (forward bias is the front-pack rule's intent — only extreme nose mass on a heavy load warns). Rear-heavy + weightUtil < 0.5 appends a steering-axle note. (post-T13 stability work) | "The right side is 12% heavier than the left." (compute side + %) |
 | shop-split | splitShopIds non-empty | "Order for {shop} was split between trips N and M." |
 | deferred-cargo | trip has deferredCargo | "{n} item(s) moved to trip N+1." |
 | unplaceable-cargo | permanent unplaceables exist | "{n} item(s) cannot be loaded: {reason summary}." |

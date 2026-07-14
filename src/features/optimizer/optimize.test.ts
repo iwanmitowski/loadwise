@@ -311,12 +311,13 @@ describe('optimize — safety time limit', () => {
   })
 })
 
-describe('optimize — longitudinal stability (vehicle balance)', () => {
-  // Directive 2014/47/EU Annex III intent: keep the load's z-CoG near mid-bay
-  // instead of piling mass onto the rear overhang. Two 600kg beverage pallets in
-  // the cargo-van are weight-limited (payload 1200) with a near-empty bay — the
-  // exact case that used to come out 100% rear-heavy.
-  it('splits two heavy pallets across the front/rear halves of the bay', () => {
+describe('optimize — front-packed loading (vehicle stability)', () => {
+  // Standard loading practice + Directive 2014/47/EU Annex III intent: pack
+  // cargo contiguously against the cabin wall (headboard). The CoG stays off
+  // the rear overhang and the load has a forward blocking chain under braking.
+  // Two 600kg beverage pallets in the cargo-van are weight-limited (payload
+  // 1200) with a near-empty bay — the case that used to come out rear-heavy.
+  it('packs two heavy pallets flush against the cabin wall, no gap', () => {
     const vehicle = buildScenarioVehicle('cargo-van', 'none')
     const shops = [makeShop('shop-1', 1, 'rear', Array<CargoCategory>(2).fill('beverage-pallet'))]
     const result = optimize(makeScenario(shops, vehicle), CFG)
@@ -325,11 +326,45 @@ describe('optimize — longitudinal stability (vehicle balance)', () => {
     const trip = result.trips[0]
     expect(trip.placements).toHaveLength(2)
 
-    const depth = vehicle.cargoSpace.depth
-    const zMid = depth / 2
-    const halves = trip.placements.map((p) => (p.position.z >= zMid ? 'front' : 'rear'))
-    expect(halves.sort()).toEqual(['front', 'rear'])
-    expect(trip.metrics.frontRearBalance).toBeGreaterThanOrEqual(0.9)
+    // Pallets are 80 deep in a 320-deep bay: cabin-flush at 240 and butted
+    // behind it at 160 — a contiguous chain to the headboard.
+    const zs = trip.placements.map((p) => p.position.z).sort((a, b) => a - b)
+    expect(zs).toEqual([160, 240])
+    // Chain reaches the front wall ⇒ nothing needs lashing forward.
+    expect(result.warnings.some((w) => w.code === 'unsecured-cargo')).toBe(false)
+    // Full-payload nose bias is real and must be surfaced, not hidden.
+    expect(
+      result.warnings.some((w) => w.code === 'imbalance' && w.message.includes('front')),
+    ).toBe(true)
+  })
+
+  it('keeps delivery bands ordered rear→front by stop (no blocked cargo)', () => {
+    // Three stops in the box truck: every stop-1 box must sit nearer the door
+    // than every stop-2 box, and so on — front-packing must never interleave.
+    const vehicle = buildScenarioVehicle('box-truck', 'none')
+    const shops = [
+      makeShop('shop-1', 1, 'rear', Array<CargoCategory>(4).fill('medium-box')),
+      makeShop('shop-2', 2, 'rear', Array<CargoCategory>(4).fill('large-box')),
+      makeShop('shop-3', 3, 'rear', Array<CargoCategory>(4).fill('medium-box')),
+    ]
+    const result = optimize(makeScenario(shops, vehicle), CFG)
+    const trip = result.trips[0]
+
+    const zRange = new Map<string, { min: number; max: number }>()
+    for (const p of trip.placements) {
+      const shopId = p.cargoId.slice(0, p.cargoId.lastIndexOf('-c'))
+      const r = zRange.get(shopId) ?? { min: Infinity, max: -Infinity }
+      r.min = Math.min(r.min, p.position.z)
+      r.max = Math.max(r.max, p.position.z)
+      zRange.set(shopId, r)
+    }
+    // Later stops sit strictly deeper: max z of stop N ≤ min z of stop N+1
+    // would be too strict (bands can share a z-plane at different x), so assert
+    // the weaker, blocking-relevant invariant instead: zero blocked cargo.
+    expect(trip.metrics.blockedCargoCount).toBe(0)
+    // And the deepest band belongs to the last stop.
+    const deepest = [...zRange.entries()].sort((a, b) => b[1].max - a[1].max)[0][0]
+    expect(deepest).toBe('shop-3')
   })
 })
 
