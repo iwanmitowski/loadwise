@@ -36,11 +36,12 @@ export function overallScore(metrics: OptimizationMetrics[], unplaceable: Unplac
 |---|---|---|
 | weight-limited | trip weightUtil ≥ 0.9 and volumeUtil < 0.7 | "Trip N reached weight capacity before volume capacity." |
 | volume-limited | volumeUtil ≥ 0.9 and weightUtil < 0.7 | "Trip N reached volume capacity before weight capacity." |
-| imbalance | LR or FR balance < 0.85 | "The right side is 12% heavier than the left." (compute side + %) |
+| imbalance | LR balance < 0.85, or FR balance below an asymmetric threshold: 0.9 when rear-heavy (rear bias unloads the steering axle); when front-heavy only < 0.5 AND weightUtil ≥ 0.7 (forward bias is the front-pack rule's intent — only extreme nose mass on a heavy load warns). Rear-heavy + weightUtil < 0.5 appends a steering-axle note. (post-T13 stability work) | "The right side is 12% heavier than the left." (compute side + %) |
 | shop-split | splitShopIds non-empty | "Order for {shop} was split between trips N and M." |
 | deferred-cargo | trip has deferredCargo | "{n} item(s) moved to trip N+1." |
 | unplaceable-cargo | permanent unplaceables exist | "{n} item(s) cannot be loaded: {reason summary}." |
 | blocked-cargo | blockedCargoCount > 0 | "{n} item(s) require moving other cargo when unloading." |
+| unsecured-cargo | items with no forward blocking chain to the front wall (optimizer `bracing.ts`; added post-T13, code added to WarningCode) | "{n} item(s) have no forward blocking against braking — secure with lashings." |
 | empty-trip | trip with 0 placements | "Trip N is empty." |
 | time-limit | passed through from T07 | "Optimization stopped at the time limit; result may be partial." |
 

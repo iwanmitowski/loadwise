@@ -122,6 +122,84 @@ describe('buildWarnings — one trigger per code', () => {
     )
   })
 
+  it('imbalance is asymmetric: rear-heavy warns at 0.88 front/rear balance', () => {
+    // Default placement sits at z=0 (rear half) → the load is rear-heavy, so the
+    // stricter 0.9 threshold applies (steering-axle risk on the rear overhang).
+    const ws = buildWarnings(
+      makeResult([makeTrip({ metrics: { frontRearBalance: 0.88 } })]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The rear of the load is 12% heavier than the front.',
+    )
+  })
+
+  it('imbalance is asymmetric: front-heavy does NOT warn at 0.88', () => {
+    // Same balance value, but the mass sits in the cabin half (z=340..400) —
+    // front bias is safe, so the lenient 0.75 threshold applies.
+    const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ placements: [frontPlacement], metrics: { frontRearBalance: 0.88 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')).toBeUndefined()
+  })
+
+  it('imbalance: front-heavy warns only when extreme AND heavily loaded', () => {
+    const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
+    // Light load (util 0.5 default): front bias is the front-pack rule working
+    // as intended — silent even at balance 0.4.
+    const silent = buildWarnings(
+      makeResult([
+        makeTrip({ placements: [frontPlacement], metrics: { frontRearBalance: 0.4 } }),
+      ]),
+      scenario,
+    )
+    expect(silent.find((x) => x.code === 'imbalance')).toBeUndefined()
+
+    // Heavy load (util 0.8): extreme nose bias is a real axle concern — warns.
+    const warned = buildWarnings(
+      makeResult([
+        makeTrip({
+          placements: [frontPlacement],
+          metrics: { frontRearBalance: 0.4, weightUtilization: 0.8 },
+        }),
+      ]),
+      scenario,
+    )
+    expect(warned.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The front of the load is 60% heavier than the rear.',
+    )
+  })
+
+  it('imbalance: rear-heavy at light load flags the steering axle', () => {
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ metrics: { frontRearBalance: 0.8, weightUtilization: 0.4 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The rear of the load is 20% heavier than the front.' +
+        ' Rear-heavy at light load can unload the steering axle.',
+    )
+  })
+
+  it('imbalance names the axis that tripped, not just the worse value', () => {
+    // frontRear 0.88 trips (rear-heavy, threshold 0.9); leftRight 0.89 does not
+    // (threshold 0.85) even though the two values are close — message must name
+    // the z axis.
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ metrics: { frontRearBalance: 0.88, leftRightBalance: 0.89 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toContain('rear of the load')
+  })
+
   it('shop-split: names the shop and the two trips', () => {
     const ws = buildWarnings(
       makeResult([makeTrip({ metrics: { splitShopIds: ['shop-1'] } })]),
@@ -150,6 +228,22 @@ describe('buildWarnings — one trigger per code', () => {
     const w = ws.find((x) => x.code === 'unplaceable-cargo')
     expect(w?.message).toBe('2 item(s) cannot be loaded: 1 too large for the vehicle, 1 too heavy for the vehicle.')
     expect(w?.tripId).toBeUndefined()
+  })
+
+  it('unsecured-cargo: an item with no forward blocking chain warns', () => {
+    // Default placement is at z=0 with the bay 400 deep — nothing between it
+    // and the front wall, so braking would slide it forward.
+    const ws = buildWarnings(makeResult([makeTrip({})]), scenario)
+    expect(ws.find((x) => x.code === 'unsecured-cargo')?.message).toBe(
+      '1 item(s) have no forward blocking against braking — secure with lashings.',
+    )
+  })
+
+  it('unsecured-cargo: an item flush against the front wall does not warn', () => {
+    // large-box is 60 deep; z=340 puts its front face exactly on the 400 wall.
+    const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
+    const ws = buildWarnings(makeResult([makeTrip({ placements: [frontPlacement] })]), scenario)
+    expect(ws.find((x) => x.code === 'unsecured-cargo')).toBeUndefined()
   })
 
   it('blocked-cargo: counts items needing others moved', () => {

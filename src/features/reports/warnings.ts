@@ -12,7 +12,9 @@ import type {
   UnplacedCargo,
   UnplacedReason,
 } from '@/types'
-import { tripWeightSplit } from './metrics'
+import { unbracedCargo } from '@/features/optimizer/bracing'
+import { toPlacedBox, type PlacedBox } from '@/features/optimizer/geometry'
+import { cargoTemplateMap, tripWeightSplit } from './metrics'
 
 /** Build every warning for a finished result, in a deterministic order. */
 export function buildWarnings(
@@ -76,8 +78,21 @@ function tripWarnings(
   }
 
   // Imbalance: report the worse of the two axes, naming the heavier side.
-  if (m.leftRightBalance < 0.85 || m.frontRearBalance < 0.85) {
-    out.push(imbalanceWarning(trip, scenario))
+  // Thresholds are asymmetric on the z axis: a REAR-heavy load (mass toward the
+  // rear door/overhang, i.e. behind the rear axle) warns at 0.9, because it
+  // unloads the steering axle — worst on a lightly loaded vehicle (Directive
+  // 2014/47/EU Annex III axle-load intent; no axle geometry in the MVP, so
+  // mass-half share is the proxy). Front bias is the front-pack rule's *intent*
+  // (mass over/between the axles), so it only warns when extreme (< 0.5) on a
+  // heavily loaded vehicle (util ≥ 0.7) — light front-packed trips stay silent.
+  const split = tripWeightSplit(trip, scenario)
+  const rearHeavy = split.rear > split.front
+  const lrTripped = m.leftRightBalance < 0.85
+  const zTripped = rearHeavy
+    ? m.frontRearBalance < 0.9
+    : m.frontRearBalance < 0.5 && m.weightUtilization >= 0.7
+  if (lrTripped || zTripped) {
+    out.push(imbalanceWarning(trip, scenario, lrTripped, zTripped))
   }
 
   // Split shop orders.
@@ -108,14 +123,49 @@ function tripWarnings(
     })
   }
 
+  // Unsecured cargo — no forward blocking chain to the front wall. Under
+  // braking (EN 12195-1's 0.8g forward case) these items rely on lashing,
+  // which the MVP doesn't model — so surface them for the driver. LIFO
+  // delivery bands make some of this unavoidable (each band ends at a gap);
+  // the warning quantifies the lashing burden rather than failing the trip.
+  const boxes = resolveTripBoxes(trip, scenario)
+  const unbraced = unbracedCargo(boxes, scenario.vehicle.cargoSpace)
+  if (unbraced.length > 0) {
+    out.push({
+      code: 'unsecured-cargo',
+      message: `${unbraced.length} item(s) have no forward blocking against braking — secure with lashings.`,
+      tripId: trip.id,
+    })
+  }
+
   return out
 }
 
-/** The imbalance message for a trip: worse axis, heavier side, and the gap %. */
-function imbalanceWarning(trip: DeliveryTrip, scenario: Scenario): OptimizationWarning {
+/** Resolve a trip's placements to boxes (skips cargo the scenario never requested). */
+function resolveTripBoxes(trip: DeliveryTrip, scenario: Scenario): PlacedBox[] {
+  const templates = cargoTemplateMap(scenario)
+  const boxes: PlacedBox[] = []
+  for (const p of trip.placements) {
+    const template = templates.get(p.cargoId)
+    if (template) boxes.push(toPlacedBox(p, template))
+  }
+  return boxes
+}
+
+/**
+ * The imbalance message for a trip: the tripped axis (worse balance value when
+ * both tripped), heavier side, and the gap %.
+ */
+function imbalanceWarning(
+  trip: DeliveryTrip,
+  scenario: Scenario,
+  lrTripped: boolean,
+  zTripped: boolean,
+): OptimizationWarning {
   const m = trip.metrics
   const split = tripWeightSplit(trip, scenario)
-  const useLR = m.leftRightBalance <= m.frontRearBalance
+  const useLR =
+    lrTripped && zTripped ? m.leftRightBalance <= m.frontRearBalance : lrTripped
 
   let message: string
   if (useLR) {
@@ -126,6 +176,11 @@ function imbalanceWarning(trip: DeliveryTrip, scenario: Scenario): OptimizationW
     const pct = Math.round((1 - m.frontRearBalance) * 100)
     const [heavier, lighter] = split.rear >= split.front ? ['rear', 'front'] : ['front', 'rear']
     message = `The ${heavier} of the load is ${pct}% heavier than the ${lighter}.`
+    // The dangerous combination: rear-heavy AND lightly loaded — the mass sits
+    // on the rear overhang with little elsewhere to counter it.
+    if (heavier === 'rear' && m.weightUtilization < 0.5) {
+      message += ' Rear-heavy at light load can unload the steering axle.'
+    }
   }
 
   return { code: 'imbalance', message, tripId: trip.id }

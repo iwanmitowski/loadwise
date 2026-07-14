@@ -94,14 +94,13 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
 
   const shopById = new Map(shops.map((s) => [s.id, s]))
 
-  // --- Stops present in this trip, ordered by delivery order (rule 6 needs the
-  // rank + count). Derived from the items actually being loaded. ---
+  // --- Stops present in this trip, ordered by delivery order (the front-pack
+  // boundary needs each item's rank). Derived from the items actually loaded. ---
   const presentShopIds = new Set(items.map((i) => i.shopId))
   const stops = [...presentShopIds]
     .map((id) => shopById.get(id))
     .filter((s): s is Shop => s !== undefined)
     .sort((a, b) => a.deliveryOrder - b.deliveryOrder || (a.id < b.id ? -1 : 1))
-  const stopCount = stops.length
   const rankByShop = new Map(stops.map((s, i) => [s.id, i]))
 
   // --- Rule 1: door assignment per item. ---
@@ -144,6 +143,11 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
   let currentWeightKg = 0
   let projLeft = 0
   let projRight = 0
+  // Running z-moment (kg·cm) of the committed load — with currentWeightKg this
+  // gives the load's longitudinal centre of gravity for the stability term.
+  let projMomentZ = 0
+  // Delivery rank of each committed box, for the front-pack band boundary.
+  const rankByCargo = new Map<string, number>()
   let loadingOrder = 0
 
   for (let i = 0; i < sequence.length; i++) {
@@ -152,6 +156,11 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
     const side = doorSideByItem.get(item.id)!
     const door = vehicle.doors.find((d) => d.side === side)!
     const rank = rankByShop.get(item.shopId) ?? 0
+    // Front-pack boundary: this item may not end deeper than the shallowest box
+    // of any LATER stop (that band was packed first — intruding beside it would
+    // block its unloading). Constant per item, so computed outside the
+    // candidate loop.
+    const boundary = laterBandBoundary(placed, rankByCargo, rank, space.depth)
 
     let best: Scored | null = null
     const seenCodes = new Set<string>()
@@ -182,13 +191,14 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
 
         const score = scorePlacement(box, {
           door,
-          rank,
-          stopCount,
+          boundary,
           space,
           diagonal,
           placed,
           projLeft,
           projRight,
+          projMomentZ,
+          currentWeightKg,
           weights: config.weights,
         })
         if (best === null || isBetter(box, score, best)) {
@@ -211,10 +221,12 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
         assignedDoor: side,
       })
       placed.push(best.box)
+      rankByCargo.set(item.id, rank)
       currentWeightKg += best.box.weightKg
       const [l, r] = projectLeftRight(best.box, space.width)
       projLeft += l
       projRight += r
+      projMomentZ += best.box.weightKg * (best.box.min.z + best.box.size.depth / 2)
       candidatePoints = updateCandidatePoints(
         candidatePoints,
         best.box,
@@ -314,6 +326,7 @@ function candidatePositions(
   for (const p of points) {
     push(p.x, p.y, p.z) // base
     push(p.x, p.y, space.depth - size.depth) // flush to cabin wall (max z)
+    push(p.x, p.y, p.z - size.depth) // face-flush BEHIND the anchor plane at p.z
     push(0, p.y, p.z) // flush to left wall
     push(space.width - size.width, p.y, p.z) // flush to right wall
   }
@@ -337,6 +350,10 @@ function updateCandidatePoints(
     { x: box.min.x + box.size.width, y: box.min.y, z: box.min.z },
     { x: box.min.x, y: box.min.y, z: box.min.z + box.size.depth },
     { x: box.min.x, y: box.min.y + box.size.height, z: box.min.z },
+    // The box's own min corner: anchor plane for the face-flush-behind variant
+    // (front-pack butts the next band up against this band's rear face). Never
+    // strictly inside its own box, so the inside-drop below keeps it.
+    { x: box.min.x, y: box.min.y, z: box.min.z },
   ]
 
   // Dedupe.
@@ -374,13 +391,17 @@ function strictlyInside(p: Vec3, b: PlacedBox): boolean {
 
 type ScoreContext = {
   door: VehicleDoor
-  rank: number
-  stopCount: number
+  /** Front-pack limit: deepest z this item's band may reach (see rule 6). */
+  boundary: number
   space: VehicleDefinition['cargoSpace']
   diagonal: number
   placed: PlacedBox[]
   projLeft: number
   projRight: number
+  /** Running z-moment (kg·cm) of the committed load. */
+  projMomentZ: number
+  /** Total committed weight (kg) — with projMomentZ gives the load's z-CoG. */
+  currentWeightKg: number
   weights: OptimizerConfig['weights']
 }
 
@@ -399,7 +420,9 @@ function scorePlacement(box: PlacedBox, ctx: ScoreContext): number {
   const da = doorAccessibility(box, ctx)
   const comp = compactness(box, ctx)
   const floor = clamp01(1 - box.min.y / ctx.space.height)
-  const wb = weightBalance(box, ctx)
+  // Vehicle stability: lateral (left/right) and longitudinal (front/rear)
+  // balance share the weightBalance weight equally.
+  const wb = (weightBalance(box, ctx) + longitudinalBalance(box, ctx)) / 2
   const sq = clamp01(computeSupport(box, ctx.placed).ratio)
 
   return (
@@ -413,13 +436,22 @@ function scorePlacement(box: PlacedBox, ctx: ScoreContext): number {
   )
 }
 
+/**
+ * Front-pack rule (replaced the proportional band model — see T13 worklog):
+ * rear-door cargo packs contiguously against the cabin wall (headboard),
+ * order-preserving. `boundary` is the shallowest face of any LATER stop's band
+ * — this item scores best flush against it (or the front wall when no later
+ * band exists) and zero past it (intruding beside a later band would block its
+ * unloading). Packing forward keeps the CoG off the rear overhang and gives
+ * cargo a forward blocking chain under braking; the only cost is a longer
+ * carry at early stops.
+ */
 function deliveryOrderCompatibility(box: PlacedBox, ctx: ScoreContext): number {
-  const cz = box.min.z + box.size.depth / 2
   if (ctx.door.side === 'rear') {
-    // Later deliveries → deeper ideal band (see worklog note on the naming of
-    // this term in the T06 prompt). rank 0 = first stop (shallow, near door).
-    const idealZ = (ctx.space.depth * (ctx.rank + 0.5)) / ctx.stopCount
-    return clamp01(1 - Math.abs(idealZ - cz) / ctx.space.depth)
+    if (ctx.boundary <= 0) return 0
+    const faceZ = box.min.z + box.size.depth
+    if (faceZ > ctx.boundary) return 0
+    return clamp01(faceZ / ctx.boundary)
   }
   // Side door: 1 when the item's z-interval overlaps the door's z-interval,
   // else decays with the gap to that interval.
@@ -431,6 +463,25 @@ function deliveryOrderCompatibility(box: PlacedBox, ctx: ScoreContext): number {
   if (overlap >= 0) return 1
   const gap = Math.max(bz0, dz0) - Math.min(bz1, dz1)
   return clamp01(1 - gap / ctx.space.depth)
+}
+
+/**
+ * The deepest z an item of delivery rank `rank` may reach: the minimum min-z
+ * over committed boxes of LATER stops (their bands were packed first), else the
+ * cabin wall. Keeps bands contiguous and strictly ordered rear→front by stop.
+ */
+function laterBandBoundary(
+  placed: PlacedBox[],
+  rankByCargo: Map<string, number>,
+  rank: number,
+  depth: number,
+): number {
+  let boundary = depth
+  for (const b of placed) {
+    const r = rankByCargo.get(b.cargoId)
+    if (r !== undefined && r > rank && b.min.z < boundary) boundary = b.min.z
+  }
+  return boundary
 }
 
 function doorAccessibility(box: PlacedBox, ctx: ScoreContext): number {
@@ -474,6 +525,30 @@ function compactness(box: PlacedBox, ctx: ScoreContext): number {
 
 function overlaps(aMin: number, aLen: number, bMin: number, bLen: number): boolean {
   return aMin < bMin + bLen && bMin < aMin + aLen
+}
+
+/**
+ * Longitudinal (front/rear) stability of the load *including* this candidate:
+ * how close the load's z-centre-of-gravity sits to the middle of the cargo bay.
+ * Strongly asymmetric — a rear-biased CoG (toward the rear door, z→0) is
+ * penalised 4× as hard as a cabin-biased one: mass on the rear overhang sits
+ * behind the rear axle and unloads the steering axle, which is most dangerous on
+ * a lightly loaded vehicle, while forward bias sits over/between the axles and
+ * is the *intent* of the front-pack rule (Directive 2014/47/EU Annex III
+ * axle-load intent; the MVP has no axle geometry, so this is the proxy — see
+ * the T13 worklog). The mild cabin-side slope only discourages extreme nose
+ * bias; it must never fight deliveryOrderCompatibility's pull to the headboard.
+ */
+function longitudinalBalance(box: PlacedBox, ctx: ScoreContext): number {
+  if (ctx.space.depth === 0) return 1
+  const cz = box.min.z + box.size.depth / 2
+  const momentZ = ctx.projMomentZ + box.weightKg * cz
+  const totalKg = ctx.currentWeightKg + box.weightKg
+  if (totalKg === 0) return 1
+  const cogFrac = momentZ / totalKg / ctx.space.depth // 0 = rear door, 1 = cabin
+  const deviation = cogFrac - 0.5
+  const penalty = deviation >= 0 ? (0.5 * deviation) / 0.5 : (2 * -deviation) / 0.5
+  return clamp01(1 - penalty)
 }
 
 /** 1 − |left−right| / total, using the box's mass projected onto the two X halves. */

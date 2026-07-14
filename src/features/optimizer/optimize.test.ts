@@ -9,8 +9,11 @@ import type {
   Scenario,
   VehicleDefinition,
 } from '@/types'
+import { generateScenario } from '@/features/scenario/generate'
+import type { VehicleId } from '@/types'
 import { DEFAULT_OPTIMIZER_CONFIG as CFG } from './config'
 import { optimize } from './optimize'
+import { validateLoad } from './validate'
 
 // --- Builders -------------------------------------------------------------
 
@@ -305,5 +308,110 @@ describe('optimize — safety time limit', () => {
     const timed = result.unplaceableCargo.filter((u) => u.detail === 'time-limit')
     expect(timed).toHaveLength(4)
     expect(timed.every((u) => u.permanent && u.reason === 'no-valid-placement')).toBe(true)
+  })
+})
+
+describe('optimize — front-packed loading (vehicle stability)', () => {
+  // Standard loading practice + Directive 2014/47/EU Annex III intent: pack
+  // cargo contiguously against the cabin wall (headboard). The CoG stays off
+  // the rear overhang and the load has a forward blocking chain under braking.
+  // Two 600kg beverage pallets in the cargo-van are weight-limited (payload
+  // 1200) with a near-empty bay — the case that used to come out rear-heavy.
+  it('packs two heavy pallets flush against the cabin wall, no gap', () => {
+    const vehicle = buildScenarioVehicle('cargo-van', 'none')
+    const shops = [makeShop('shop-1', 1, 'rear', Array<CargoCategory>(2).fill('beverage-pallet'))]
+    const result = optimize(makeScenario(shops, vehicle), CFG)
+
+    expect(result.trips).toHaveLength(1)
+    const trip = result.trips[0]
+    expect(trip.placements).toHaveLength(2)
+
+    // Pallets are 80 deep in a 320-deep bay: cabin-flush at 240 and butted
+    // behind it at 160 — a contiguous chain to the headboard.
+    const zs = trip.placements.map((p) => p.position.z).sort((a, b) => a - b)
+    expect(zs).toEqual([160, 240])
+    // Chain reaches the front wall ⇒ nothing needs lashing forward.
+    expect(result.warnings.some((w) => w.code === 'unsecured-cargo')).toBe(false)
+    // Full-payload nose bias is real and must be surfaced, not hidden.
+    expect(
+      result.warnings.some((w) => w.code === 'imbalance' && w.message.includes('front')),
+    ).toBe(true)
+  })
+
+  it('keeps delivery bands ordered rear→front by stop (no blocked cargo)', () => {
+    // Three stops in the box truck: every stop-1 box must sit nearer the door
+    // than every stop-2 box, and so on — front-packing must never interleave.
+    const vehicle = buildScenarioVehicle('box-truck', 'none')
+    const shops = [
+      makeShop('shop-1', 1, 'rear', Array<CargoCategory>(4).fill('medium-box')),
+      makeShop('shop-2', 2, 'rear', Array<CargoCategory>(4).fill('large-box')),
+      makeShop('shop-3', 3, 'rear', Array<CargoCategory>(4).fill('medium-box')),
+    ]
+    const result = optimize(makeScenario(shops, vehicle), CFG)
+    const trip = result.trips[0]
+
+    const zRange = new Map<string, { min: number; max: number }>()
+    for (const p of trip.placements) {
+      const shopId = p.cargoId.slice(0, p.cargoId.lastIndexOf('-c'))
+      const r = zRange.get(shopId) ?? { min: Infinity, max: -Infinity }
+      r.min = Math.min(r.min, p.position.z)
+      r.max = Math.max(r.max, p.position.z)
+      zRange.set(shopId, r)
+    }
+    // Later stops sit strictly deeper: max z of stop N ≤ min z of stop N+1
+    // would be too strict (bands can share a z-plane at different x), so assert
+    // the weaker, blocking-relevant invariant instead: zero blocked cargo.
+    expect(trip.metrics.blockedCargoCount).toBe(0)
+    // And the deepest band belongs to the last stop.
+    const deepest = [...zRange.entries()].sort((a, b) => b[1].max - a[1].max)[0][0]
+    expect(deepest).toBe('shop-3')
+  })
+})
+
+describe('optimize — every committed trip is physically valid', () => {
+  // Regression: the anti-split rule defers a whole shop by stripping its boxes
+  // from the trip, which could leave another shop's box — packed on top of a
+  // deferred box — floating with zero support (caught in the 3D view; e.g.
+  // cargo-van seed-6 shop-3-c9 sat at y=40 on nothing). Every final trip must
+  // pass validateLoad, so no box is ever left unsupported after the fact.
+  const vehicles: VehicleId[] = ['cargo-van', 'box-truck', 'semi-trailer']
+
+  for (const vehicleId of vehicles) {
+    for (const shopCount of [3, 4, 5]) {
+      it(`${vehicleId} / ${shopCount} shops: no trip has support/overlap/bounds violations`, () => {
+        for (let s = 0; s < 20; s++) {
+          const scenario = generateScenario({
+            seed: `seed-${s}`,
+            vehicleId,
+            sideDoor: 'none',
+            shopCount,
+          })
+          const result = optimize(scenario, CFG)
+          for (const trip of result.trips) {
+            const violations = validateLoad(trip.placements, scenario, CFG)
+            expect(
+              violations,
+              `seed-${s} ${trip.id}: ${violations.map((v) => `${v.code}:${v.cargoId}`).join(', ')}`,
+            ).toEqual([])
+          }
+        }
+      })
+    }
+  }
+
+  it('regenerates support after anti-split defers a supporting shop (cargo-van seed-6)', () => {
+    const scenario = generateScenario({
+      seed: 'seed-6',
+      vehicleId: 'cargo-van',
+      sideDoor: 'none',
+      shopCount: 3,
+    })
+    const result = optimize(scenario, CFG)
+    for (const trip of result.trips) {
+      const support = validateLoad(trip.placements, scenario, CFG).filter(
+        (v) => v.code === 'insufficient-support',
+      )
+      expect(support).toEqual([])
+    }
   })
 })
