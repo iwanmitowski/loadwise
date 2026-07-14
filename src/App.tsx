@@ -1,4 +1,5 @@
 import { AppHeader } from '@/components/AppHeader'
+import { Toaster } from '@/components/Toaster'
 import { ScreenSetup } from '@/components/screens/ScreenSetup'
 import { ScreenPlanning } from '@/components/screens/ScreenPlanning'
 import { ScreenSimulation } from '@/components/screens/ScreenSimulation'
@@ -22,6 +23,7 @@ function App() {
       <main className="min-h-0 flex-1 overflow-auto">
         <Screen />
       </main>
+      <Toaster />
     </div>
   )
 }

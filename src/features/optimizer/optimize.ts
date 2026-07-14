@@ -302,7 +302,13 @@ export function optimize(
 // Pre-filter (step 1)
 // --------------------------------------------------------------------------
 
-function prefilterPermanents(
+/**
+ * Split items into those that could conceivably be placed and those that can
+ * never fit *this* vehicle (dims in every orientation, door aperture, or single
+ * item over payload). Exported so the planning screen can show a cheap
+ * pre-warning without re-implementing the check (T17). Pure and side-effect free.
+ */
+export function prefilterPermanents(
   items: CargoItem[],
   vehicle: VehicleDefinition,
 ): { placeable: CargoItem[]; permanent: UnplacedCargo[] } {

@@ -22,7 +22,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T14 | Loading animation | B | daniel-dimitrov | T13 | [T14](prompts/T14-loading-animation.md) | done |
 | T15 | Delivery simulation | B | daniel-dimitrov | T13, T05 | [T15](prompts/T15-delivery-simulation.md) | done |
 | T16 | Report screen, trip selector, legend | C | daniel-dimitrov | T09 (mock) → T08 (real) | [T16](prompts/T16-report-screen.md) | done |
-| T17 | Demo mode + edge-case UX | C | — | T10, T11 | [T17](prompts/T17-demo-mode-and-edge-ux.md) | todo |
+| T17 | Demo mode + edge-case UX | C | daniel-dimitrov | T10, T11 | [T17](prompts/T17-demo-mode-and-edge-ux.md) | done |
 | T18 | Integration hardening (15 edge cases) | all (lead A) | — | T04–T16 | [T18](prompts/T18-integration-hardening.md) | todo |
 | T19 | Test pass + Playwright smoke | all (lead C) | — | T18 | [T19](prompts/T19-test-pass.md) | todo |
 | T20 | Polish, README, final deploy, demo script | all (lead B) | — | T18 | [T20](prompts/T20-polish-and-ship.md) | todo |

@@ -6,7 +6,9 @@ import {
   createOptimizerClient,
   type OptimizerClient,
 } from '@/workers/optimizerClient'
+import { debug } from '@/utils/debug'
 import { useUiStore } from './uiStore'
+import { useToastStore } from './toastStore'
 
 export type OptimizationStatus =
   | 'idle'
@@ -45,6 +47,17 @@ export const useOptimizationStore = create<OptimizationState>((set, get) => ({
   error: null,
 
   run: (scenario) => {
+    // Debug seam (T17): ?debugOptimizerError forces the failure path so the
+    // retry-able error alert can be verified against the real app.
+    if (debug.optimizerError()) {
+      set({
+        status: 'error',
+        progress: null,
+        result: null,
+        error: 'Debug: forced optimizer error (remove ?debugOptimizerError to run).',
+      })
+      return
+    }
     // The client auto-cancels any in-flight run (its promise rejects with
     // CancelledError and is swallowed below), so re-running is always safe.
     set({
@@ -64,6 +77,10 @@ export const useOptimizationStore = create<OptimizationState>((set, get) => ({
         set({ status: 'done', progress: { percent: 100, stage: 'Done' }, result })
         // selectedTripId default: first trip when a result arrives.
         useUiStore.getState().setSelectedTrip(result.trips[0]?.id ?? null)
+        // Multi-trip is a notable outcome — surface it (idea.md edge case).
+        if (result.trips.length > 1) {
+          useToastStore.getState().show(`Plan needs ${result.trips.length} trips`, 'info')
+        }
       })
       .catch((error: unknown) => {
         if (error instanceof CancelledError) return // cancel()/reset() set state
