@@ -56,6 +56,41 @@ describe('scenarioStore.generate', () => {
   })
 })
 
+describe('uiStore playback guard (T14/T15)', () => {
+  it('navigating to another screen mid-playback resets playback to idle', () => {
+    useUiStore.getState().goTo('simulation')
+    useUiStore.getState().setPlayback({ mode: 'delivery', playing: true, index: 2 })
+
+    useUiStore.getState().goTo('planning')
+
+    expect(useUiStore.getState().playback).toMatchObject({
+      mode: 'idle',
+      playing: false,
+      index: 0,
+    })
+  })
+
+  it('re-navigating to the same screen leaves playback alone', () => {
+    useUiStore.getState().goTo('simulation')
+    useUiStore.getState().setPlayback({ mode: 'loading', playing: true, index: 3 })
+
+    useUiStore.getState().goTo('simulation')
+
+    expect(useUiStore.getState().playback).toMatchObject({ mode: 'loading', index: 3 })
+  })
+
+  it('switching trips mid-playback resets playback; re-selecting the same trip does not', () => {
+    useUiStore.getState().setSelectedTrip('trip-1')
+    useUiStore.getState().setPlayback({ mode: 'delivery', playing: true, index: 1 })
+
+    useUiStore.getState().setSelectedTrip('trip-1')
+    expect(useUiStore.getState().playback.mode).toBe('delivery')
+
+    useUiStore.getState().setSelectedTrip('trip-2')
+    expect(useUiStore.getState().playback).toMatchObject({ mode: 'idle', index: 0 })
+  })
+})
+
 describe('optimizationStore.run (fake worker client)', () => {
   beforeEach(() => {
     setOptimizerClient(createFakeOptimizerClient())

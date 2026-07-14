@@ -10,12 +10,13 @@
 
 import { useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
-import type { Mesh, MeshStandardMaterial } from 'three'
+import type { Mesh } from 'three'
 import type { VehicleDefinition } from '@/types'
 import { useUiStore } from '@/state/uiStore'
 import type { CargoRenderItem } from '../CargoLayer/cargoModel'
 import { itemIndexAt, transformAt } from './loadingTimeline'
 import { loadingClock, resetLoadingClock } from './playbackClock'
+import { clearPulse, setPulse } from './pulse'
 import { useLoadingTimeline } from './useLoadingTimeline'
 
 // Emissive pulse on the in-flight box — same emissive channel the selection
@@ -75,12 +76,9 @@ export function LoadingAnimator({ items, vehicle, meshes }: LoadingAnimatorProps
       mesh.position.set(...transform.position)
 
       if (transform.phase === 'moving') {
-        const material = mesh.material as MeshStandardMaterial
-        material.emissive.set(item.color)
-        material.emissiveIntensity = PULSE_PEAK * Math.sin(transform.flight * Math.PI)
-        mesh.userData.loadingPulse = true
-      } else if (mesh.userData.loadingPulse) {
-        // Reset once when a box stops flying — never every frame, so React's
+        setPulse(mesh, item.color, PULSE_PEAK * Math.sin(transform.flight * Math.PI))
+      } else {
+        // Cleared once when a box stops flying (no-op otherwise), so React's
         // selection-highlight emissive (CargoBox props) stays untouched.
         clearPulse(mesh)
       }
@@ -92,12 +90,4 @@ export function LoadingAnimator({ items, vehicle, meshes }: LoadingAnimatorProps
   })
 
   return null
-}
-
-function clearPulse(mesh: Mesh): void {
-  if (!mesh.userData.loadingPulse) return
-  const material = mesh.material as MeshStandardMaterial
-  material.emissive.set('#000000')
-  material.emissiveIntensity = 0
-  mesh.userData.loadingPulse = false
 }

@@ -10,6 +10,8 @@ export type Playback = {
   speed: PlaybackSpeed
   /** Step index within the active animation (loading order / delivery stop). */
   index: number
+  /** Delivery mode only (T15): advance to the next stop automatically. */
+  autoPlay: boolean
 }
 
 export type UiState = {
@@ -55,6 +57,7 @@ const DEFAULT_PLAYBACK: Playback = {
   playing: false,
   speed: 1,
   index: 0,
+  autoPlay: false,
 }
 
 // Roof hidden by default so the loaded cargo is visible from above; walls on.
@@ -76,8 +79,22 @@ export const useUiStore = create<UiState>((set) => ({
   resetViewNonce: 0,
   ...DEFAULT_VIEW,
 
-  goTo: (screen) => set({ screen }),
-  setSelectedTrip: (selectedTripId) => set({ selectedTripId }),
+  // Navigating away or switching trips mid-playback must land back in a clean
+  // idle state (T14/T15 guard). This lives HERE, not in a component unmount
+  // cleanup: React StrictMode double-mounts effects, so an unmount-side reset
+  // fires spuriously on mount and kills a just-started playback.
+  goTo: (screen) =>
+    set((state) =>
+      state.playback.mode !== 'idle' && screen !== state.screen
+        ? { screen, playback: DEFAULT_PLAYBACK }
+        : { screen },
+    ),
+  setSelectedTrip: (selectedTripId) =>
+    set((state) =>
+      state.playback.mode !== 'idle' && selectedTripId !== state.selectedTripId
+        ? { selectedTripId, playback: DEFAULT_PLAYBACK }
+        : { selectedTripId },
+    ),
   setSelectedCargo: (selectedCargoId) => set({ selectedCargoId }),
   setShopFilter: (shopFilter) => set({ shopFilter }),
   setWallsVisible: (wallsVisible) => set({ wallsVisible }),

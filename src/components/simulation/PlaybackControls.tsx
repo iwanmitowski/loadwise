@@ -8,49 +8,25 @@
 // progress bar reads it on a rAF loop with a change threshold, so the HUD
 // re-renders a handful of times per second, never the 3D scene.
 
-import { useEffect, useState } from 'react'
 import { useUiStore, type PlaybackSpeed } from '@/state/uiStore'
 // Direct module import (not the Animations barrel) so this HUD component never
 // drags @react-three/fiber into non-canvas bundles or jsdom tests.
-import {
-  clockFraction,
-  loadingClock,
-  resetLoadingClock,
-} from '@/three/Animations/playbackClock'
+import { loadingClock, resetLoadingClock } from '@/three/Animations/playbackClock'
+import { useClockFraction } from './useClockFraction'
 
 const SPEEDS: PlaybackSpeed[] = [0.5, 1, 2, 4]
 
-/** rAF-throttled read of the shared clock; only re-renders on visible change. */
-function useTimelineFraction(active: boolean): number {
-  const [fraction, setFraction] = useState(0)
-
-  useEffect(() => {
-    if (!active) return
-    let raf = 0
-    const tick = () => {
-      const next = clockFraction(loadingClock)
-      // ~0.5% threshold keeps most frames render-free; exact 0/1 always land
-      // so the bar starts empty and finishes full.
-      setFraction((prev) =>
-        next === 0 || next === 1 || Math.abs(next - prev) > 0.005 ? next : prev,
-      )
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [active])
-
-  return fraction
-}
-
-function TransportButton({
+/** Small transport-row button; shared with the delivery panel (T15). */
+export function TransportButton({
   label,
   title,
   onClick,
+  active = false,
 }: {
   label: string
   title: string
   onClick: () => void
+  active?: boolean
 }) {
   return (
     <button
@@ -58,7 +34,13 @@ function TransportButton({
       onClick={onClick}
       title={title}
       aria-label={title}
-      className="rounded-md border border-slate-600/60 bg-slate-800/60 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:bg-slate-700/60"
+      aria-pressed={active || undefined}
+      className={[
+        'rounded-md border px-3 py-1.5 text-sm font-medium transition',
+        active
+          ? 'border-sky-400/60 bg-sky-500/20 text-sky-100'
+          : 'border-slate-600/60 bg-slate-800/60 text-slate-200 hover:bg-slate-700/60',
+      ].join(' ')}
     >
       {label}
     </button>
@@ -68,7 +50,7 @@ function TransportButton({
 export function PlaybackControls({ itemCount }: { itemCount: number }) {
   const playback = useUiStore((s) => s.playback)
   const setPlayback = useUiStore((s) => s.setPlayback)
-  const fraction = useTimelineFraction(playback.mode === 'loading')
+  const fraction = useClockFraction(loadingClock, playback.mode === 'loading')
 
   // T15's delivery simulation owns its own transport.
   if (playback.mode === 'delivery') return null

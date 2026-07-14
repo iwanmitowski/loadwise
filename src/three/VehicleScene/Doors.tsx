@@ -1,9 +1,10 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { DoubleSide, type Group } from 'three'
-import type { VehicleDefinition, VehicleDoor } from '@/types'
+import type { DoorSide, VehicleDefinition, VehicleDoor } from '@/types'
 import { CM } from '../units'
 import { useUiStore } from '@/state/uiStore'
+import { deliveryClock } from '../Animations/playbackClock'
 
 const DOOR_COLOR = '#f59e0b'
 const REAR_OPEN_ANGLE = Math.PI * 0.62 // ~112° — swings clear of the opening
@@ -15,6 +16,15 @@ const SMOOTH_RATE = 7 // exponential approach; ~0.5s to settle
  */
 function useDoorsOpen(): boolean {
   return useUiStore((s) => s.doorsOpen || s.playback.mode === 'loading')
+}
+
+/**
+ * Per-frame open target for one door: the subscribed toggle/loading state OR
+ * the delivery choreography holding this side open (written frame-by-frame by
+ * the DeliveryAnimator into the shared clock — deliberately not React state).
+ */
+function doorOpenNow(subscribedOpen: boolean, side: DoorSide): boolean {
+  return subscribedOpen || deliveryClock.openDoors.includes(side)
 }
 
 /** Framerate-independent exponential approach toward `target`. */
@@ -47,7 +57,8 @@ function RearDoor({ door }: { door: VehicleDoor }) {
   const half = dw / 2
 
   useFrame((_, delta) => {
-    progress.current = approach(progress.current, doorsOpen ? 1 : 0, delta)
+    const open = doorOpenNow(doorsOpen, door.side)
+    progress.current = approach(progress.current, open ? 1 : 0, delta)
     const angle = progress.current * REAR_OPEN_ANGLE
     if (left.current) left.current.rotation.y = angle
     if (right.current) right.current.rotation.y = -angle
@@ -91,7 +102,8 @@ function SideDoor({
   const closedZ = dz + dw / 2
 
   useFrame((_, delta) => {
-    progress.current = approach(progress.current, doorsOpen ? 1 : 0, delta)
+    const open = doorOpenNow(doorsOpen, door.side)
+    progress.current = approach(progress.current, open ? 1 : 0, delta)
     if (panel.current) panel.current.position.z = closedZ + progress.current * dw
   })
 

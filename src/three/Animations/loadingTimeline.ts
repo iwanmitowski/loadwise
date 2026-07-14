@@ -14,7 +14,7 @@
 //   exact final transform at the window end so there is no drift.
 
 import type { CargoRenderItem } from '../CargoLayer/cargoModel'
-import type { VehicleDefinition } from '@/types'
+import type { DoorSide, VehicleDefinition } from '@/types'
 import { m } from '../units'
 
 /** Seconds between consecutive items' flight starts (at speed 1). */
@@ -48,15 +48,18 @@ export type LoadingTransform = {
 
 /**
  * Build the flight path for one placed item, given the scenario vehicle's
- * doors. Falls back to the rear door (then the first door) if the assigned
- * door isn't on this vehicle — the animation must never crash on odd data.
+ * doors. Defaults to the item's assigned door; T15 passes `doorSide` to route
+ * a blocker through the door of the item it blocks. Falls back to the rear
+ * door (then the first door) if the requested door isn't on this vehicle —
+ * the animation must never crash on odd data.
  */
 export function buildItemPath(
   item: CargoRenderItem,
   vehicle: VehicleDefinition,
+  doorSide: DoorSide = item.assignedDoor,
 ): ItemPath {
   const door =
-    vehicle.doors.find((d) => d.side === item.assignedDoor) ??
+    vehicle.doors.find((d) => d.side === doorSide) ??
     vehicle.doors.find((d) => d.side === 'rear') ??
     vehicle.doors[0]
   const final = item.center
@@ -114,6 +117,25 @@ function lerp3(a: Vec3Tuple, b: Vec3Tuple, u: number): Vec3Tuple {
 }
 
 /**
+ * Position along a two-segment dog-leg `from → via → to` at progress u ∈ [0, 1]
+ * (clamped): first half eases from→via, second half via→to, smoothstep each.
+ * Shared by the loading flight (T14) and the delivery slide-out/return (T15,
+ * which runs it in reverse by swapping the endpoints).
+ */
+export function dogLegAt(
+  u: number,
+  from: Vec3Tuple,
+  via: Vec3Tuple,
+  to: Vec3Tuple,
+): Vec3Tuple {
+  if (u <= 0) return from
+  if (u >= 1) return to
+  return u < 0.5
+    ? lerp3(from, via, smoothstep(u / 0.5))
+    : lerp3(via, to, smoothstep((u - 0.5) / 0.5))
+}
+
+/**
  * Transform of item `index` at timeline time `t` (seconds, speed already
  * applied by the caller). Before its window: hidden at staging. During: eased
  * along staging→waypoint for the first half, waypoint→final for the second.
@@ -135,9 +157,6 @@ export function transformAt(
   }
 
   const u = (t - start) / LOADING_DUR_S
-  const position =
-    u < 0.5
-      ? lerp3(path.staging, path.waypoint, smoothstep(u / 0.5))
-      : lerp3(path.waypoint, path.final, smoothstep((u - 0.5) / 0.5))
+  const position = dogLegAt(u, path.staging, path.waypoint, path.final)
   return { visible: true, phase: 'moving', position, flight: u }
 }
