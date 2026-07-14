@@ -9,6 +9,16 @@ LLM.
 **Live demo:** _TBD — Vercel production URL added once the project is connected
 in the Vercel dashboard (framework preset: Vite)._
 
+## Demo mode
+
+Click **Load demo** on the Setup screen for a curated, one-click walkthrough:
+box truck with a left side door, 6 shops, then **Optimize**. It reliably shows
+two trips, side-door loading, mixed cargo and a deferred item. It is fully
+reproducible — the demo uses the fixed seed `demo-1` (see
+[`src/fixtures/demoConfig.ts`](src/fixtures/demoConfig.ts); the seed was picked
+by the dev script [`scripts/findDemoSeed.ts`](scripts/findDemoSeed.ts)). Any
+scenario is reproducible from its seed shown on the Planning and Report screens.
+
 ## Quickstart
 
 ```bash

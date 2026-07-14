@@ -3,6 +3,9 @@ import { useOptimizationStore } from '@/state/optimizationStore'
 import { useScenarioStore } from '@/state/scenarioStore'
 import { useUiStore } from '@/state/uiStore'
 import { buildReportModel } from '@/features/reports/reportModel'
+import { validateLoad } from '@/features/optimizer/validate'
+import { DEFAULT_OPTIMIZER_CONFIG } from '@/features/optimizer/config'
+import { DEMO_SEED } from '@/fixtures/demoConfig'
 import { SeedBadge } from '@/components/planning/SeedBadge'
 import { TripSelector } from '@/components/simulation/TripSelector'
 import {
@@ -40,6 +43,22 @@ export function ScreenReport() {
     [result],
   )
 
+  // Defensive re-validation (idea.md edge case): the optimizer should never
+  // emit an invalid load, but if it does we surface it loudly instead of
+  // rendering a wrong-but-confident report. Details go to the console.
+  const violationCount = useMemo(() => {
+    if (!result || !scenario) return 0
+    let total = 0
+    for (const trip of result.trips) {
+      const violations = validateLoad(trip.placements, scenario, DEFAULT_OPTIMIZER_CONFIG)
+      if (violations.length > 0) {
+        total += violations.length
+        console.error(`[report] Trip ${trip.tripNumber} validation failed:`, violations)
+      }
+    }
+    return total
+  }, [result, scenario])
+
   // Screen is gated on a result, but stay defensive.
   if (!result || !scenario || !model) {
     return (
@@ -76,6 +95,22 @@ export function ScreenReport() {
         <ExportButtons scenario={scenario} result={result} />
       </header>
 
+      {violationCount > 0 && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-700 bg-red-950/50 p-4 text-sm text-red-200"
+        >
+          <p className="font-semibold text-red-100">
+            Internal validation failed ({violationCount} violation
+            {violationCount === 1 ? '' : 's'})
+          </p>
+          <p className="mt-1 text-red-300/90">
+            The plan below breaks one or more loading constraints — see the
+            browser console for details. This should not happen; please report it.
+          </p>
+        </div>
+      )}
+
       {/* Trip selector (selected-trip view) */}
       {model.trips.length > 0 && (
         <section className="flex flex-col gap-3">
@@ -111,6 +146,15 @@ export function ScreenReport() {
         <SectionTitle>Unplaceable cargo</SectionTitle>
         <UnplaceableTable items={model.unplaceableCargo} templateNames={templateNames} />
       </section>
+
+      <footer className="border-t border-slate-800 pt-4 text-xs text-slate-500">
+        Deterministic report — same seed + config always reproduces this plan.
+        Reproduce the built-in walkthrough any time with demo seed{' '}
+        <code className="rounded bg-slate-800 px-1 py-0.5 font-mono text-slate-300">
+          {DEMO_SEED}
+        </code>
+        .
+      </footer>
     </div>
   )
 }

@@ -135,4 +135,27 @@ describe('ScreenPlanning', () => {
     fireEvent.click(screen.getByRole('button', { name: '← Back' }))
     expect(useUiStore.getState().screen).toBe('setup')
   })
+
+  describe('empty-state gating (T17)', () => {
+    const allZero: Scenario = {
+      ...demoScenario,
+      shops: demoScenario.shops.map((s) => ({ ...s, requestedCargo: [] })),
+    }
+
+    it('shows "Nothing to deliver" and disables Optimize when no cargo is requested', () => {
+      useScenarioStore.setState({ scenario: allZero })
+      render(<ScreenPlanning />)
+
+      expect(screen.getByText('Nothing to deliver')).toBeInTheDocument()
+      const optimize = screen.getByRole('button', { name: 'Optimize' })
+      expect(optimize).toBeDisabled()
+      expect(optimize).toHaveAttribute('title', expect.stringContaining('regenerate'))
+    })
+
+    it('enables Optimize when at least one shop has cargo', () => {
+      render(<ScreenPlanning />) // fixtureScenario has cargo
+      expect(screen.getByRole('button', { name: 'Optimize' })).toBeEnabled()
+      expect(screen.queryByText('Nothing to deliver')).not.toBeInTheDocument()
+    })
+  })
 })

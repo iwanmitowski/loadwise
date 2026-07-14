@@ -67,8 +67,16 @@ describe('ScreenSetup', () => {
     expect(useUiStore.getState().screen).toBe('planning')
   })
 
-  it('keeps the demo placeholder disabled until T17', () => {
+  it('Load demo generates the demo scenario and navigates to planning', () => {
     render(<ScreenSetup />)
-    expect(screen.getByRole('button', { name: 'Load demo' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load demo' }))
+
+    const { config, scenario } = useScenarioStore.getState()
+    expect(config.seed).toBe('demo-1')
+    expect(config.sideDoor).toBe('left')
+    expect(config.shopCount).toBe(6)
+    expect(scenario).not.toBeNull()
+    expect(useUiStore.getState().screen).toBe('planning')
   })
 })

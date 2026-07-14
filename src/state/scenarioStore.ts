@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { Scenario, ScenarioConfig } from '@/types'
 import { generateScenario } from '@/features/scenario/generate'
+import { DEMO_CONFIG } from '@/fixtures/demoConfig'
 import { useOptimizationStore } from './optimizationStore'
 import { useUiStore } from './uiStore'
 
@@ -10,6 +11,8 @@ export type ScenarioState = {
   setConfig(patch: Partial<ScenarioConfig>): void
   generate(): void
   randomizeSeed(): void
+  /** Demo mode (T17): apply the hard-coded demo config and generate. */
+  loadDemo(): void
 }
 
 const DEFAULT_CONFIG: ScenarioConfig = {
@@ -38,4 +41,9 @@ export const useScenarioStore = create<ScenarioState>((set, get) => ({
     set((state) => ({
       config: { ...state.config, seed: crypto.randomUUID().slice(0, 8) },
     })),
+
+  loadDemo: () => {
+    set({ config: { ...DEMO_CONFIG } })
+    get().generate()
+  },
 }))

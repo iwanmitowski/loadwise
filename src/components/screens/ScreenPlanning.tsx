@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SeedBadge } from '@/components/planning/SeedBadge'
 import { ShopCard } from '@/components/planning/ShopCard'
 import { TotalsBar } from '@/components/planning/TotalsBar'
 import { scenarioTotals, shopsByDeliveryOrder } from '@/components/planning/totals'
+import { prefilterPermanents } from '@/features/optimizer/optimize'
 import { useOptimizationStore } from '@/state/optimizationStore'
 import { useScenarioStore } from '@/state/scenarioStore'
 import { useUiStore } from '@/state/uiStore'
@@ -38,6 +39,19 @@ export function ScreenPlanning() {
     }
   }, [awaitingRun, status, goTo])
 
+  // Cheap pre-check (reuses T07's pre-filter): items that can't fit the vehicle
+  // at all, tallied per shop for the amber pre-warning chip.
+  const shopUnfit = useMemo(() => {
+    const counts = new Map<string, number>()
+    if (!scenario) return counts
+    const { permanent } = prefilterPermanents(
+      scenario.shops.flatMap((s) => s.requestedCargo),
+      scenario.vehicle,
+    )
+    for (const p of permanent) counts.set(p.shopId, (counts.get(p.shopId) ?? 0) + 1)
+    return counts
+  }, [scenario])
+
   if (!scenario) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-4 p-8">
@@ -68,7 +82,10 @@ export function ScreenPlanning() {
   const totals = scenarioTotals(scenario)
   const shops = shopsByDeliveryOrder(scenario)
   const shopIds = scenario.shops.map((s) => s.id)
+  const vehicleDoorSides = scenario.vehicle.doors.map((d) => d.side)
   const running = status === 'running'
+  // No shops, or every shop requested zero cargo → nothing to optimize.
+  const nothingToDeliver = totals.units === 0
 
   const onOptimize = () => {
     run(scenario)
@@ -98,10 +115,28 @@ export function ScreenPlanning() {
 
       <TotalsBar totals={totals} />
 
+      {nothingToDeliver && (
+        <div
+          role="status"
+          className="rounded-lg border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300"
+        >
+          <p className="font-medium text-slate-100">Nothing to deliver</p>
+          <p className="mt-1 text-slate-400">
+            No shop requested any cargo. Regenerate the scenario to get a
+            deliverable load.
+          </p>
+        </div>
+      )}
+
       <ul className="flex flex-col gap-3" aria-label="Shops in delivery order">
         {shops.map((shop) => (
           <li key={shop.id}>
-            <ShopCard shop={shop} color={shopColorById(shop.id, shopIds)} />
+            <ShopCard
+              shop={shop}
+              color={shopColorById(shop.id, shopIds)}
+              vehicleDoorSides={vehicleDoorSides}
+              unfittableCount={shopUnfit.get(shop.id) ?? 0}
+            />
           </li>
         ))}
       </ul>
@@ -153,8 +188,9 @@ export function ScreenPlanning() {
         <button
           type="button"
           onClick={onOptimize}
-          disabled={running}
-          className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
+          disabled={running || nothingToDeliver}
+          title={nothingToDeliver ? 'Nothing to deliver — regenerate the scenario first' : undefined}
+          className="rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-medium hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Optimize
         </button>

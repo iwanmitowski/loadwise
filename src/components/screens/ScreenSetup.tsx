@@ -14,10 +14,16 @@ export function ScreenSetup() {
   const setConfig = useScenarioStore((s) => s.setConfig)
   const generate = useScenarioStore((s) => s.generate)
   const randomizeSeed = useScenarioStore((s) => s.randomizeSeed)
+  const loadDemo = useScenarioStore((s) => s.loadDemo)
   const goTo = useUiStore((s) => s.goTo)
 
   const onGenerate = () => {
     generate()
+    goTo('planning')
+  }
+
+  const onLoadDemo = () => {
+    loadDemo()
     goTo('planning')
   }
 
@@ -68,16 +74,19 @@ export function ScreenSetup() {
         >
           Generate scenario
         </button>
-        {/* T17 activates demo mode; placeholder so the layout is final. */}
         <button
           type="button"
-          disabled
-          title="Coming soon"
-          className="cursor-not-allowed rounded-md border border-slate-800 px-5 py-2.5 text-sm text-slate-600"
+          onClick={onLoadDemo}
+          title="Generate the curated demo scenario and jump to planning"
+          className="rounded-md border border-slate-700 px-5 py-2.5 text-sm text-slate-200 hover:bg-slate-800"
         >
           Load demo
         </button>
       </div>
+      <p className="-mt-4 text-xs text-slate-500">
+        The demo uses a fixed seed for a reproducible walkthrough: multiple
+        trips, side-door loading, mixed cargo and a deferred item.
+      </p>
     </div>
   )
 }
