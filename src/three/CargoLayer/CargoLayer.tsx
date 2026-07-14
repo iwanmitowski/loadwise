@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { Line } from '@react-three/drei'
 import type { Mesh } from 'three'
 import type { DeliveryTrip, Scenario } from '@/types'
@@ -44,17 +44,10 @@ export function CargoLayer({
     [meshes],
   )
 
-  // State-machine guard (T14): this layer unmounting mid-playback — trip
-  // switch (keyed remount), regeneration, leaving the screen — resets playback
-  // to idle so no animator or refs are left orphaned.
-  useEffect(() => {
-    return () => {
-      const ui = useUiStore.getState()
-      if (ui.playback.mode !== 'idle') {
-        ui.setPlayback({ mode: 'idle', playing: false, index: 0 })
-      }
-    }
-  }, [])
+  // No unmount-side playback reset here: the T14/T15 state-machine guard lives
+  // in uiStore (goTo / setSelectedTrip / resetForNewScenario), because a
+  // cleanup with store side effects fires spuriously under StrictMode's
+  // double-mount and would kill playback the moment it starts.
 
   return (
     <group onPointerMissed={() => setSelectedCargo(null)}>
