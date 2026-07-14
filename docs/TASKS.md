@@ -20,7 +20,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T12 | Vehicle 3D scene | B | ivan-mitovski | T01, T02 | [T12](prompts/T12-vehicle-scene.md) | done |
 | T13 | Cargo rendering & interaction | B | ivan-mitovski | T03, T12 | [T13](prompts/T13-cargo-rendering.md) | done |
 | T14 | Loading animation | B | daniel-dimitrov | T13 | [T14](prompts/T14-loading-animation.md) | done |
-| T15 | Delivery simulation | B | — | T13, T05 | [T15](prompts/T15-delivery-simulation.md) | todo |
+| T15 | Delivery simulation | B | daniel-dimitrov | T13, T05 | [T15](prompts/T15-delivery-simulation.md) | done |
 | T16 | Report screen, trip selector, legend | C | — | T09 (mock) → T08 (real) | [T16](prompts/T16-report-screen.md) | todo |
 | T17 | Demo mode + edge-case UX | C | — | T10, T11 | [T17](prompts/T17-demo-mode-and-edge-ux.md) | todo |
 | T18 | Integration hardening (15 edge cases) | all (lead A) | — | T04–T16 | [T18](prompts/T18-integration-hardening.md) | todo |

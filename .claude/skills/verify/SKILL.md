@@ -39,6 +39,13 @@ Gotchas:
   same store the app uses. Set `useScenarioStore`/`useOptimizationStore`
   state directly (e.g. `demoSideDoorResult` from `/src/fixtures/demo.ts`)
   and `goTo('simulation')` — no UI flow needed.
+- **Injection breaks after HMR**: once a module hot-updates, the app's import
+  graph uses `?t=<timestamp>` URLs while `page.evaluate` imports the bare URL
+  — two separate module instances, so store writes go nowhere. After editing
+  source with the server running, restart the dev server before injecting.
+- The R3F canvas tree (CargoLayer, animators) mounts noticeably later than
+  the DOM in headless — wait ~1–2s after `waitForSelector('canvas')` before
+  poking playback clocks, or the animator mount effects will stomp your writes.
 
 ## Flows worth driving
 
@@ -46,3 +53,9 @@ Gotchas:
   cycle/`item k / N` + progress bar). Pause must freeze counter and bar;
   leaving the Simulation screen mid-playback and returning must land back in
   idle with the replay button.
+- Delivery route (T15): `🚚 Simulate route` → per-stop choreography (door
+  opens, blockers slide out amber, cargo delivers, blockers return, door
+  closes). Use `demoBlockingResult` (injected) for a deterministic 1-blocker
+  case; panel's "Extra moves" must equal the report's `extraUnloadingMoves`.
+  Freeze mid-op deterministically by setting `deliveryClock.t` (import
+  `/src/three/Animations/playbackClock.ts`) with `playing: false`.
