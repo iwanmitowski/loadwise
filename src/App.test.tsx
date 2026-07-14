@@ -7,6 +7,13 @@ import { useScenarioStore } from '@/state/scenarioStore'
 import { setOptimizerClient, useOptimizationStore } from '@/state/optimizationStore'
 import { useUiStore } from '@/state/uiStore'
 
+// The simulation screen (T12) mounts a real R3F <Canvas>, which needs WebGL +
+// ResizeObserver that jsdom lacks. This is a navigation/gating test, not a 3D
+// test — stub the scene so it stays DOM-only and fast.
+vi.mock('@/three/VehicleScene', () => ({
+  VehicleScene: () => null,
+}))
+
 // Reset the singleton stores so the shell starts from its initial state.
 // jsdom has no Worker — swap the optimizer client for the timer-based fake.
 beforeEach(() => {
@@ -48,6 +55,7 @@ describe('App shell — happy path', () => {
     expect(useOptimizationStore.getState().result).not.toBeNull()
     expect(stepButton('Simulation')).toBeEnabled()
     expect(stepButton('Report')).toBeEnabled()
-    expect(screen.getByText('Delivery simulation')).toBeInTheDocument()
+    // Landed on the simulation screen — its scene caption is showing.
+    expect(screen.getByText(/placement\(s\)/)).toBeInTheDocument()
   })
 })

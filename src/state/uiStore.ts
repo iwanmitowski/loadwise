@@ -22,6 +22,13 @@ export type UiState = {
   roofVisible: boolean
   doorsOpen: boolean
   playback: Playback
+  /**
+   * Monotonic counter bumped whenever the view is reset. The 3D camera-reset
+   * hook (T12) subscribes to it: a change (not the value) is the signal to snap
+   * the camera back to its initial pose. A counter avoids the "already at
+   * default" problem a boolean flag would have.
+   */
+  resetViewNonce: number
 
   goTo(screen: Screen): void
   setSelectedTrip(tripId: string | null): void
@@ -57,6 +64,7 @@ export const useUiStore = create<UiState>((set) => ({
   selectedTripId: null,
   selectedCargoId: null,
   shopFilter: null,
+  resetViewNonce: 0,
   ...DEFAULT_VIEW,
 
   goTo: (screen) => set({ screen }),
@@ -69,13 +77,16 @@ export const useUiStore = create<UiState>((set) => ({
   setPlayback: (patch) =>
     set((state) => ({ playback: { ...state.playback, ...patch } })),
 
-  resetView: () => set({ ...DEFAULT_VIEW }),
+  // Bump the nonce so the camera-reset hook fires alongside the toggle reset.
+  resetView: () =>
+    set((state) => ({ ...DEFAULT_VIEW, resetViewNonce: state.resetViewNonce + 1 })),
   resetForNewScenario: () =>
-    set({
+    set((state) => ({
       screen: 'setup',
       selectedTripId: null,
       selectedCargoId: null,
       shopFilter: null,
+      resetViewNonce: state.resetViewNonce + 1,
       ...DEFAULT_VIEW,
-    }),
+    })),
 }))

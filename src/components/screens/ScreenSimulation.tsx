@@ -1,19 +1,22 @@
 import { useOptimizationStore } from '@/state/optimizationStore'
+import { useScenarioStore } from '@/state/scenarioStore'
 import { useUiStore } from '@/state/uiStore'
+import { VehicleScene } from '@/three/VehicleScene'
+import { SceneToolbar } from '@/components/simulation/SceneToolbar'
 
 /**
- * Simulation screen — placeholder shell (Track B fills in the 3D delivery sim).
+ * Simulation screen — the interactive 3D view of the loaded vehicle.
  *
- * Layout slots to own later:
- *  - full-height 3D scene with loading + stop-by-stop delivery animation
- *  - playback transport (play/pause, speed, scrubber) bound to ui.playback
- *  - trip selector + door/wall/roof view toggles
+ * T12 lands the vehicle shell + doors + camera controls (empty cargo space).
+ * Still to own here: cargo meshes (T13), loading animation (T14), stop-by-stop
+ * delivery simulation + playback transport (T15).
  */
 export function ScreenSimulation() {
   const result = useOptimizationStore((s) => s.result)
+  const scenario = useScenarioStore((s) => s.scenario)
   const selectedTripId = useUiStore((s) => s.selectedTripId)
 
-  if (!result) {
+  if (!result || !scenario) {
     return (
       <div className="p-8 text-sm text-slate-400">
         No optimization result yet — run the optimizer on the Planning screen.
@@ -25,16 +28,23 @@ export function ScreenSimulation() {
     result.trips.find((t) => t.id === selectedTripId) ?? result.trips[0]
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 p-8">
-      <div>
-        <h2 className="text-xl font-semibold">Delivery simulation</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Placeholder — the interactive 3D simulation arrives with Track B.
-        </p>
+    <div className="relative h-full w-full">
+      <VehicleScene vehicle={scenario.vehicle} />
+
+      {/* View controls (walls/roof/doors/reset). */}
+      <div className="pointer-events-none absolute right-4 top-4">
+        <SceneToolbar />
       </div>
-      <div className="rounded-lg bg-slate-900 p-4 text-sm">
-        Trip {trip?.tripNumber} · {trip?.placements.length} placement(s) ·{' '}
-        {trip?.stops.length} stop(s)
+
+      {/* Trip caption — cargo + full transport arrive with T13–T15. */}
+      <div className="pointer-events-none absolute left-4 top-4 rounded-md border border-slate-700/60 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 backdrop-blur">
+        <span className="font-semibold">{scenario.vehicle.name}</span>
+        {trip ? (
+          <span className="text-slate-400">
+            {' · '}Trip {trip.tripNumber} · {trip.placements.length} placement(s) ·{' '}
+            {trip.stops.length} stop(s)
+          </span>
+        ) : null}
       </div>
     </div>
   )
