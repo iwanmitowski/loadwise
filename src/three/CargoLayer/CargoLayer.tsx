@@ -3,7 +3,7 @@ import { Line } from '@react-three/drei'
 import type { Mesh } from 'three'
 import type { DeliveryTrip, Scenario } from '@/types'
 import { useUiStore } from '@/state/uiStore'
-import { LoadingAnimator } from '../Animations'
+import { DeliveryAnimator, LoadingAnimator } from '../Animations'
 import { CargoBox } from './CargoBox'
 import { buildCargoRenderItems, centerOfMass } from './cargoModel'
 
@@ -69,6 +69,9 @@ export function CargoLayer({
       {comVisible && com ? <CenterOfMassMarker center={com.center} /> : null}
       {playbackMode === 'loading' ? (
         <LoadingAnimator items={items} vehicle={scenario.vehicle} meshes={meshes} />
+      ) : null}
+      {playbackMode === 'delivery' ? (
+        <DeliveryAnimator trip={trip} scenario={scenario} items={items} meshes={meshes} />
       ) : null}
     </group>
   )

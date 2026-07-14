@@ -6,14 +6,15 @@ import { CargoLayer } from '@/three/CargoLayer'
 import { SceneToolbar } from '@/components/simulation/SceneToolbar'
 import { CargoInfoPanel } from '@/components/simulation/CargoInfoPanel'
 import { PlaybackControls } from '@/components/simulation/PlaybackControls'
+import { DeliveryPanel } from '@/components/simulation/DeliveryPanel'
 
 /**
  * Simulation screen — the interactive 3D view of the loaded vehicle.
  *
  * T12 lands the vehicle shell + doors + camera controls (empty cargo space).
  * T13 adds the cargo layer (boxes, selection, filter, CoM) + info panel.
- * T14 adds the loading-animation replay + transport. Still to own here:
- * stop-by-stop delivery simulation (T15).
+ * T14 adds the loading-animation replay + transport; T15 the stop-by-stop
+ * delivery simulation (route HUD, blockers, per-stop choreography).
  */
 export function ScreenSimulation() {
   const result = useOptimizationStore((s) => s.result)
@@ -52,10 +53,13 @@ export function ScreenSimulation() {
         </div>
       ) : null}
 
-      {/* Loading-animation transport (T14). */}
+      {/* Playback transports: loading replay (T14) + delivery route (T15).
+          In idle both entry buttons sit side by side; in either mode only the
+          active transport renders. */}
       {trip ? (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
+        <div className="pointer-events-none absolute bottom-4 left-1/2 flex -translate-x-1/2 items-end gap-2">
           <PlaybackControls itemCount={trip.placements.length} />
+          <DeliveryPanel trip={trip} scenario={scenario} />
         </div>
       ) : null}
 
