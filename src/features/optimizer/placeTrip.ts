@@ -144,6 +144,9 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
   let currentWeightKg = 0
   let projLeft = 0
   let projRight = 0
+  // Running z-moment (kg·cm) of the committed load — with currentWeightKg this
+  // gives the load's longitudinal centre of gravity for the stability term.
+  let projMomentZ = 0
   let loadingOrder = 0
 
   for (let i = 0; i < sequence.length; i++) {
@@ -189,6 +192,8 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
           placed,
           projLeft,
           projRight,
+          projMomentZ,
+          currentWeightKg,
           weights: config.weights,
         })
         if (best === null || isBetter(box, score, best)) {
@@ -215,6 +220,7 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
       const [l, r] = projectLeftRight(best.box, space.width)
       projLeft += l
       projRight += r
+      projMomentZ += best.box.weightKg * (best.box.min.z + best.box.size.depth / 2)
       candidatePoints = updateCandidatePoints(
         candidatePoints,
         best.box,
@@ -381,6 +387,10 @@ type ScoreContext = {
   placed: PlacedBox[]
   projLeft: number
   projRight: number
+  /** Running z-moment (kg·cm) of the committed load. */
+  projMomentZ: number
+  /** Total committed weight (kg) — with projMomentZ gives the load's z-CoG. */
+  currentWeightKg: number
   weights: OptimizerConfig['weights']
 }
 
@@ -399,7 +409,9 @@ function scorePlacement(box: PlacedBox, ctx: ScoreContext): number {
   const da = doorAccessibility(box, ctx)
   const comp = compactness(box, ctx)
   const floor = clamp01(1 - box.min.y / ctx.space.height)
-  const wb = weightBalance(box, ctx)
+  // Vehicle stability: lateral (left/right) and longitudinal (front/rear)
+  // balance share the weightBalance weight equally.
+  const wb = (weightBalance(box, ctx) + longitudinalBalance(box, ctx)) / 2
   const sq = clamp01(computeSupport(box, ctx.placed).ratio)
 
   return (
@@ -474,6 +486,30 @@ function compactness(box: PlacedBox, ctx: ScoreContext): number {
 
 function overlaps(aMin: number, aLen: number, bMin: number, bLen: number): boolean {
   return aMin < bMin + bLen && bMin < aMin + aLen
+}
+
+/**
+ * Longitudinal (front/rear) stability of the load *including* this candidate:
+ * how close the load's z-centre-of-gravity sits to the middle of the cargo bay.
+ * Asymmetric on purpose — a rear-biased CoG (toward the rear door, z→0) is
+ * penalised twice as hard as a cabin-biased one: mass on the rear overhang sits
+ * behind the rear axle and unloads the steering axle, which is most dangerous on
+ * a lightly loaded vehicle (Directive 2014/47/EU Annex III axle-load intent; the
+ * MVP has no axle geometry, so mid-bay CoG is the proxy — see the T13 worklog).
+ * Note the tension with deliveryOrderCompatibility: stop-1 cargo must stay near
+ * the rear door for LIFO unloading, so this term centres heavy items *within*
+ * their delivery band rather than fighting the unloading order outright.
+ */
+function longitudinalBalance(box: PlacedBox, ctx: ScoreContext): number {
+  if (ctx.space.depth === 0) return 1
+  const cz = box.min.z + box.size.depth / 2
+  const momentZ = ctx.projMomentZ + box.weightKg * cz
+  const totalKg = ctx.currentWeightKg + box.weightKg
+  if (totalKg === 0) return 1
+  const cogFrac = momentZ / totalKg / ctx.space.depth // 0 = rear door, 1 = cabin
+  const deviation = cogFrac - 0.5
+  const penalty = deviation >= 0 ? deviation / 0.5 : (2 * -deviation) / 0.5
+  return clamp01(1 - penalty)
 }
 
 /** 1 − |left−right| / total, using the box's mass projected onto the two X halves. */

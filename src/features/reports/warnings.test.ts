@@ -122,6 +122,70 @@ describe('buildWarnings — one trigger per code', () => {
     )
   })
 
+  it('imbalance is asymmetric: rear-heavy warns at 0.88 front/rear balance', () => {
+    // Default placement sits at z=0 (rear half) → the load is rear-heavy, so the
+    // stricter 0.9 threshold applies (steering-axle risk on the rear overhang).
+    const ws = buildWarnings(
+      makeResult([makeTrip({ metrics: { frontRearBalance: 0.88 } })]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The rear of the load is 12% heavier than the front.',
+    )
+  })
+
+  it('imbalance is asymmetric: front-heavy does NOT warn at 0.88', () => {
+    // Same balance value, but the mass sits in the cabin half (z=340..400) —
+    // front bias is safe, so the lenient 0.75 threshold applies.
+    const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ placements: [frontPlacement], metrics: { frontRearBalance: 0.88 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')).toBeUndefined()
+  })
+
+  it('imbalance: front-heavy still warns below 0.75', () => {
+    const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ placements: [frontPlacement], metrics: { frontRearBalance: 0.7 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The front of the load is 30% heavier than the rear.',
+    )
+  })
+
+  it('imbalance: rear-heavy at light load flags the steering axle', () => {
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ metrics: { frontRearBalance: 0.8, weightUtilization: 0.4 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toBe(
+      'The rear of the load is 20% heavier than the front.' +
+        ' Rear-heavy at light load can unload the steering axle.',
+    )
+  })
+
+  it('imbalance names the axis that tripped, not just the worse value', () => {
+    // frontRear 0.88 trips (rear-heavy, threshold 0.9); leftRight 0.89 does not
+    // (threshold 0.85) even though the two values are close — message must name
+    // the z axis.
+    const ws = buildWarnings(
+      makeResult([
+        makeTrip({ metrics: { frontRearBalance: 0.88, leftRightBalance: 0.89 } }),
+      ]),
+      scenario,
+    )
+    expect(ws.find((x) => x.code === 'imbalance')?.message).toContain('rear of the load')
+  })
+
   it('shop-split: names the shop and the two trips', () => {
     const ws = buildWarnings(
       makeResult([makeTrip({ metrics: { splitShopIds: ['shop-1'] } })]),

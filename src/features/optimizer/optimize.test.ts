@@ -311,6 +311,28 @@ describe('optimize — safety time limit', () => {
   })
 })
 
+describe('optimize — longitudinal stability (vehicle balance)', () => {
+  // Directive 2014/47/EU Annex III intent: keep the load's z-CoG near mid-bay
+  // instead of piling mass onto the rear overhang. Two 600kg beverage pallets in
+  // the cargo-van are weight-limited (payload 1200) with a near-empty bay — the
+  // exact case that used to come out 100% rear-heavy.
+  it('splits two heavy pallets across the front/rear halves of the bay', () => {
+    const vehicle = buildScenarioVehicle('cargo-van', 'none')
+    const shops = [makeShop('shop-1', 1, 'rear', Array<CargoCategory>(2).fill('beverage-pallet'))]
+    const result = optimize(makeScenario(shops, vehicle), CFG)
+
+    expect(result.trips).toHaveLength(1)
+    const trip = result.trips[0]
+    expect(trip.placements).toHaveLength(2)
+
+    const depth = vehicle.cargoSpace.depth
+    const zMid = depth / 2
+    const halves = trip.placements.map((p) => (p.position.z >= zMid ? 'front' : 'rear'))
+    expect(halves.sort()).toEqual(['front', 'rear'])
+    expect(trip.metrics.frontRearBalance).toBeGreaterThanOrEqual(0.9)
+  })
+})
+
 describe('optimize — every committed trip is physically valid', () => {
   // Regression: the anti-split rule defers a whole shop by stripping its boxes
   // from the trip, which could leave another shop's box — packed on top of a

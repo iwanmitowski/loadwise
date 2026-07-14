@@ -3,11 +3,16 @@ import type { OptimizerConfig } from '@/types'
 // Tunable numbers only — no logic lives in this file.
 
 export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
+  // weightBalance ↑ / doorAccessibility ↓ (was 10/20): the balance term now
+  // covers longitudinal (front/rear) vehicle stability too, and the door term
+  // was dragging whole loads onto the rear overhang. Tuned empirically over 240
+  // generated scenarios: rear-heavy trips 54%→30%, unloading moves −18%, trip
+  // count unchanged (see the T13 worklog stability addendum).
   weights: {
     compactness: 20,
     floorPreference: 15,
-    weightBalance: 10,
-    doorAccessibility: 20,
+    weightBalance: 25,
+    doorAccessibility: 12,
     deliveryOrderCompatibility: 25,
     supportQuality: 10,
   },

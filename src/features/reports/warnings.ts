@@ -76,8 +76,18 @@ function tripWarnings(
   }
 
   // Imbalance: report the worse of the two axes, naming the heavier side.
-  if (m.leftRightBalance < 0.85 || m.frontRearBalance < 0.85) {
-    out.push(imbalanceWarning(trip, scenario))
+  // Thresholds are asymmetric on the z axis: a REAR-heavy load (mass toward the
+  // rear door/overhang, i.e. behind the rear axle) warns earlier than a
+  // cabin-biased one, because it unloads the steering axle — worst on a lightly
+  // loaded vehicle (Directive 2014/47/EU Annex III axle-load intent; no axle
+  // geometry in the MVP, so mass-half share is the proxy).
+  const split = tripWeightSplit(trip, scenario)
+  const rearHeavy = split.rear > split.front
+  const zThreshold = rearHeavy ? 0.9 : 0.75
+  const lrTripped = m.leftRightBalance < 0.85
+  const zTripped = m.frontRearBalance < zThreshold
+  if (lrTripped || zTripped) {
+    out.push(imbalanceWarning(trip, scenario, lrTripped, zTripped))
   }
 
   // Split shop orders.
@@ -111,11 +121,20 @@ function tripWarnings(
   return out
 }
 
-/** The imbalance message for a trip: worse axis, heavier side, and the gap %. */
-function imbalanceWarning(trip: DeliveryTrip, scenario: Scenario): OptimizationWarning {
+/**
+ * The imbalance message for a trip: the tripped axis (worse balance value when
+ * both tripped), heavier side, and the gap %.
+ */
+function imbalanceWarning(
+  trip: DeliveryTrip,
+  scenario: Scenario,
+  lrTripped: boolean,
+  zTripped: boolean,
+): OptimizationWarning {
   const m = trip.metrics
   const split = tripWeightSplit(trip, scenario)
-  const useLR = m.leftRightBalance <= m.frontRearBalance
+  const useLR =
+    lrTripped && zTripped ? m.leftRightBalance <= m.frontRearBalance : lrTripped
 
   let message: string
   if (useLR) {
@@ -126,6 +145,11 @@ function imbalanceWarning(trip: DeliveryTrip, scenario: Scenario): OptimizationW
     const pct = Math.round((1 - m.frontRearBalance) * 100)
     const [heavier, lighter] = split.rear >= split.front ? ['rear', 'front'] : ['front', 'rear']
     message = `The ${heavier} of the load is ${pct}% heavier than the ${lighter}.`
+    // The dangerous combination: rear-heavy AND lightly loaded — the mass sits
+    // on the rear overhang with little elsewhere to counter it.
+    if (heavier === 'rear' && m.weightUtilization < 0.5) {
+      message += ' Rear-heavy at light load can unload the steering axle.'
+    }
   }
 
   return { code: 'imbalance', message, tripId: trip.id }

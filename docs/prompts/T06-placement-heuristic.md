@@ -41,7 +41,7 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput;
 - `doorAccessibility`: 1 − normalized distance from item center to its assigned door's opening center (straight-line, normalized by vehicle diagonal).
 - `compactness`: fraction of the 3 min-faces (x=…, y=…, z-max toward cabin) touching a wall or another box (0, ⅓, ⅔, 1).
 - `floorPreference`: `1 − min.y / vehicleHeight`.
-- `weightBalance`: 1 − |projected left/right weight delta| / totalWeightSoFar (compute incrementally; 1 when total is 0).
+- `weightBalance`: mean of two sub-terms (compute both incrementally; each 1 when total weight is 0). *Lateral:* 1 − |projected left/right weight delta| / totalWeightSoFar. *Longitudinal* (added post-T13 for vehicle stability, see T13 worklog): 1 − penalty for the load's prospective z-CoG deviating from mid-bay, where rear-ward deviation (toward the rear door/overhang — unloads the steering axle) is penalized 2× as hard as cabin-ward. Default weights were retuned with it: `weightBalance` 10→25, `doorAccessibility` 20→12 (empirical: rear-heavy trips 54%→30%, unloading moves −18%, trip count unchanged).
 - `supportQuality`: the support ratio from T05 (1 for floor).
 
 **7. Select** best score; tiebreak: lower y → higher z → lower x → cargoId asc. Place, update candidates, continue.
