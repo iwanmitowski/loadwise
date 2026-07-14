@@ -9,6 +9,14 @@ const DOOR_COLOR = '#f59e0b'
 const REAR_OPEN_ANGLE = Math.PI * 0.62 // ~112° — swings clear of the opening
 const SMOOTH_RATE = 7 // exponential approach; ~0.5s to settle
 
+/**
+ * Doors are forced open while the loading animation plays (cargo must fly in
+ * through an open door); otherwise the user's toggle rules.
+ */
+function useDoorsOpen(): boolean {
+  return useUiStore((s) => s.doorsOpen || s.playback.mode === 'loading')
+}
+
 /** Framerate-independent exponential approach toward `target`. */
 function approach(current: number, target: number, delta: number): number {
   return current + (target - current) * (1 - Math.exp(-SMOOTH_RATE * delta))
@@ -31,7 +39,7 @@ function RearDoor({ door }: { door: VehicleDoor }) {
   const left = useRef<Group>(null)
   const right = useRef<Group>(null)
   const progress = useRef(0)
-  const doorsOpen = useUiStore((s) => s.doorsOpen)
+  const doorsOpen = useDoorsOpen()
 
   const dx = door.position.x * CM
   const dw = door.width * CM
@@ -75,7 +83,7 @@ function SideDoor({
 }) {
   const panel = useRef<Group>(null)
   const progress = useRef(0)
-  const doorsOpen = useUiStore((s) => s.doorsOpen)
+  const doorsOpen = useDoorsOpen()
 
   const dw = door.width * CM // runs along Z for side doors
   const dh = door.height * CM
