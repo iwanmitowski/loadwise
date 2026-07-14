@@ -19,6 +19,15 @@ export function fmtPct(ratio: number): string {
   return `${Math.round(ratio * 100)}%`
 }
 
+/**
+ * Like {@link fmtPct} but renders a dash for non-finite ratios (NaN/Infinity)
+ * instead of `"NaN%"`. The report layer uses this so a divide-by-zero balance
+ * (empty trip, zero total weight) can never surface as `"NaN%"` — see T16.
+ */
+export function fmtPctSafe(ratio: number): string {
+  return Number.isFinite(ratio) ? fmtPct(ratio) : '—'
+}
+
 /** Cubic centimetres → cubic metres with 2 decimals: `340000` → `"0.34 m³"`. */
 export function fmtM3(cm3: number): string {
   return `${(cm3 / 1_000_000).toFixed(2)} m³`

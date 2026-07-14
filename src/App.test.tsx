@@ -55,7 +55,7 @@ describe('App shell — happy path', () => {
     expect(useOptimizationStore.getState().result).not.toBeNull()
     expect(stepButton('Simulation')).toBeEnabled()
     expect(stepButton('Report')).toBeEnabled()
-    // Landed on the simulation screen — its scene caption is showing.
-    expect(screen.getByText(/placement\(s\)/)).toBeInTheDocument()
+    // Landed on the simulation screen — its shop legend panel is showing.
+    expect(screen.getByText('Shops')).toBeInTheDocument()
   })
 })
