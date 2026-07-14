@@ -216,6 +216,22 @@ describe('buildWarnings — one trigger per code', () => {
     expect(w?.tripId).toBeUndefined()
   })
 
+  it('unsecured-cargo: an item with no forward blocking chain warns', () => {
+    // Default placement is at z=0 with the bay 400 deep — nothing between it
+    // and the front wall, so braking would slide it forward.
+    const ws = buildWarnings(makeResult([makeTrip({})]), scenario)
+    expect(ws.find((x) => x.code === 'unsecured-cargo')?.message).toBe(
+      '1 item(s) have no forward blocking against braking — secure with lashings.',
+    )
+  })
+
+  it('unsecured-cargo: an item flush against the front wall does not warn', () => {
+    // large-box is 60 deep; z=340 puts its front face exactly on the 400 wall.
+    const frontPlacement: CargoPlacement = { ...aPlacement, position: { x: 0, y: 0, z: 340 } }
+    const ws = buildWarnings(makeResult([makeTrip({ placements: [frontPlacement] })]), scenario)
+    expect(ws.find((x) => x.code === 'unsecured-cargo')).toBeUndefined()
+  })
+
   it('blocked-cargo: counts items needing others moved', () => {
     const ws = buildWarnings(
       makeResult([makeTrip({ metrics: { blockedCargoCount: 2 } })]),

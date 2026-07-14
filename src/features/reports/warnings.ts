@@ -12,7 +12,9 @@ import type {
   UnplacedCargo,
   UnplacedReason,
 } from '@/types'
-import { tripWeightSplit } from './metrics'
+import { unbracedCargo } from '@/features/optimizer/bracing'
+import { toPlacedBox, type PlacedBox } from '@/features/optimizer/geometry'
+import { cargoTemplateMap, tripWeightSplit } from './metrics'
 
 /** Build every warning for a finished result, in a deterministic order. */
 export function buildWarnings(
@@ -118,7 +120,33 @@ function tripWarnings(
     })
   }
 
+  // Unsecured cargo — no forward blocking chain to the front wall. Under
+  // braking (EN 12195-1's 0.8g forward case) these items rely on lashing,
+  // which the MVP doesn't model — so surface them for the driver. LIFO
+  // delivery bands make some of this unavoidable (each band ends at a gap);
+  // the warning quantifies the lashing burden rather than failing the trip.
+  const boxes = resolveTripBoxes(trip, scenario)
+  const unbraced = unbracedCargo(boxes, scenario.vehicle.cargoSpace)
+  if (unbraced.length > 0) {
+    out.push({
+      code: 'unsecured-cargo',
+      message: `${unbraced.length} item(s) have no forward blocking against braking — secure with lashings.`,
+      tripId: trip.id,
+    })
+  }
+
   return out
+}
+
+/** Resolve a trip's placements to boxes (skips cargo the scenario never requested). */
+function resolveTripBoxes(trip: DeliveryTrip, scenario: Scenario): PlacedBox[] {
+  const templates = cargoTemplateMap(scenario)
+  const boxes: PlacedBox[] = []
+  for (const p of trip.placements) {
+    const template = templates.get(p.cargoId)
+    if (template) boxes.push(toPlacedBox(p, template))
+  }
+  return boxes
 }
 
 /**

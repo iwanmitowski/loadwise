@@ -41,6 +41,8 @@ export type WarningCode =
   | 'deferred-cargo'
   | 'unplaceable-cargo'
   | 'blocked-cargo'
+  /** Items with no forward blocking chain to the front wall — need lashing. */
+  | 'unsecured-cargo'
   | 'empty-trip'
   | 'time-limit'
 
