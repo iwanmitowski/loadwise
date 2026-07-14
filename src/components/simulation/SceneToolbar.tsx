@@ -1,6 +1,5 @@
 // Scene chrome for the 3D view: wall/roof/door toggles + camera reset, wired to
-// uiStore. T12 adds this now so the scene is controllable; T09/T10 own the full
-// simulation screen and may relocate it into their layout.
+// uiStore. Overlaid on the simulation screen's 3D canvas.
 
 import { useUiStore } from '@/state/uiStore'
 
@@ -36,9 +35,9 @@ export function SceneToolbar() {
   const wallsVisible = useUiStore((s) => s.wallsVisible)
   const roofVisible = useUiStore((s) => s.roofVisible)
   const doorsOpen = useUiStore((s) => s.doorsOpen)
-  const toggleWalls = useUiStore((s) => s.toggleWalls)
-  const toggleRoof = useUiStore((s) => s.toggleRoof)
-  const toggleDoors = useUiStore((s) => s.toggleDoors)
+  const setWallsVisible = useUiStore((s) => s.setWallsVisible)
+  const setRoofVisible = useUiStore((s) => s.setRoofVisible)
+  const setDoorsOpen = useUiStore((s) => s.setDoorsOpen)
   const resetView = useUiStore((s) => s.resetView)
 
   return (
@@ -47,19 +46,19 @@ export function SceneToolbar() {
         label="Walls"
         icon="▦"
         active={wallsVisible}
-        onClick={toggleWalls}
+        onClick={() => setWallsVisible(!wallsVisible)}
       />
       <ToggleButton
         label="Roof"
         icon="▤"
         active={roofVisible}
-        onClick={toggleRoof}
+        onClick={() => setRoofVisible(!roofVisible)}
       />
       <ToggleButton
         label={doorsOpen ? 'Doors open' : 'Doors'}
         icon="⧉"
         active={doorsOpen}
-        onClick={toggleDoors}
+        onClick={() => setDoorsOpen(!doorsOpen)}
       />
       <button
         type="button"

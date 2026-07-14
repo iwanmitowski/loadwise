@@ -14,9 +14,9 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T06 | Placement heuristic (single trip) | A | ivan-mitovski | T03, T05 | [T06](prompts/T06-placement-heuristic.md) | done |
 | T07 | Multi-trip planner | A | ivan-mitovski | T06 | [T07](prompts/T07-multi-trip-planner.md) | done |
 | T08 | Metrics, warnings, report data | A | ivan-mitovski | T07 | [T08](prompts/T08-metrics-and-warnings.md) | done |
-| T09 | Zustand stores + app shell | C | — | T01, T02 | [T09](prompts/T09-stores-and-app-shell.md) | todo |
-| T10 | Scenario Setup & Planning screens | C | — | T09 | [T10](prompts/T10-setup-and-planning-screens.md) | todo |
-| T11 | Optimizer Web Worker + client | C | — | T02 (mock) → T07 (real) | [T11](prompts/T11-optimizer-worker.md) | todo |
+| T09 | Zustand stores + app shell | C | ivan-mitovski | T01, T02 | [T09](prompts/T09-stores-and-app-shell.md) | done |
+| T10 | Scenario Setup & Planning screens | C | daniel-dimitrov | T09 | [T10](prompts/T10-setup-and-planning-screens.md) | done |
+| T11 | Optimizer Web Worker + client | C | daniel-dimitrov | T02 (mock) → T07 (real) | [T11](prompts/T11-optimizer-worker.md) | done |
 | T12 | Vehicle 3D scene | B | ivan-mitovski | T01, T02 | [T12](prompts/T12-vehicle-scene.md) | done |
 | T13 | Cargo rendering & interaction | B | — | T03, T12 | [T13](prompts/T13-cargo-rendering.md) | todo |
 | T14 | Loading animation | B | — | T13 | [T14](prompts/T14-loading-animation.md) | todo |

@@ -1,44 +1,92 @@
-// UI/view state for the 3D scene chrome. Created by T12 for the scene toggles
-// (walls, roof, doors, camera reset). T09 owns the broader app-shell store and
-// may extend this file with screen/selection state — keep additions additive so
-// T12's scene controls keep working.
-
 import { create } from 'zustand'
 
+export type Screen = 'setup' | 'planning' | 'simulation' | 'report'
+export type PlaybackMode = 'idle' | 'loading' | 'delivery'
+export type PlaybackSpeed = 0.5 | 1 | 2 | 4
+
+export type Playback = {
+  mode: PlaybackMode
+  playing: boolean
+  speed: PlaybackSpeed
+  /** Step index within the active animation (loading order / delivery stop). */
+  index: number
+}
+
 export type UiState = {
-  /** Transparent side/front walls shown. Toggle from scene chrome. */
+  screen: Screen
+  selectedTripId: string | null
+  selectedCargoId: string | null
+  /** shopId to filter cargo/highlights by, or null = show all. */
+  shopFilter: string | null
   wallsVisible: boolean
-  /** Transparent roof panel shown. */
   roofVisible: boolean
-  /** Doors swung/slid open (animated in the scene). */
   doorsOpen: boolean
+  playback: Playback
   /**
-   * Monotonic counter bumped by `resetView()`. The camera-reset hook subscribes
-   * to it; a change (not the value) is the signal to snap back to the initial
-   * pose. A counter avoids the "already false" problem of a boolean flag.
+   * Monotonic counter bumped whenever the view is reset. The 3D camera-reset
+   * hook (T12) subscribes to it: a change (not the value) is the signal to snap
+   * the camera back to its initial pose. A counter avoids the "already at
+   * default" problem a boolean flag would have.
    */
   resetViewNonce: number
 
-  toggleWalls: () => void
-  toggleRoof: () => void
-  toggleDoors: () => void
-  setWallsVisible: (visible: boolean) => void
-  setRoofVisible: (visible: boolean) => void
-  setDoorsOpen: (open: boolean) => void
-  resetView: () => void
+  goTo(screen: Screen): void
+  setSelectedTrip(tripId: string | null): void
+  setSelectedCargo(cargoId: string | null): void
+  setShopFilter(shopId: string | null): void
+  setWallsVisible(visible: boolean): void
+  setRoofVisible(visible: boolean): void
+  setDoorsOpen(open: boolean): void
+  setPlayback(patch: Partial<Playback>): void
+  /** Reset the 3D view toggles + playback to defaults (keeps screen/selection). */
+  resetView(): void
+  /** Full reset of selections, filter, view and screen — used on new scenario. */
+  resetForNewScenario(): void
 }
 
-export const useUiStore = create<UiState>((set) => ({
+const DEFAULT_PLAYBACK: Playback = {
+  mode: 'idle',
+  playing: false,
+  speed: 1,
+  index: 0,
+}
+
+// Roof hidden by default so the loaded cargo is visible from above; walls on.
+const DEFAULT_VIEW = {
   wallsVisible: true,
   roofVisible: false,
   doorsOpen: false,
-  resetViewNonce: 0,
+  playback: DEFAULT_PLAYBACK,
+} as const
 
-  toggleWalls: () => set((s) => ({ wallsVisible: !s.wallsVisible })),
-  toggleRoof: () => set((s) => ({ roofVisible: !s.roofVisible })),
-  toggleDoors: () => set((s) => ({ doorsOpen: !s.doorsOpen })),
-  setWallsVisible: (visible) => set({ wallsVisible: visible }),
-  setRoofVisible: (visible) => set({ roofVisible: visible }),
-  setDoorsOpen: (open) => set({ doorsOpen: open }),
-  resetView: () => set((s) => ({ resetViewNonce: s.resetViewNonce + 1 })),
+export const useUiStore = create<UiState>((set) => ({
+  screen: 'setup',
+  selectedTripId: null,
+  selectedCargoId: null,
+  shopFilter: null,
+  resetViewNonce: 0,
+  ...DEFAULT_VIEW,
+
+  goTo: (screen) => set({ screen }),
+  setSelectedTrip: (selectedTripId) => set({ selectedTripId }),
+  setSelectedCargo: (selectedCargoId) => set({ selectedCargoId }),
+  setShopFilter: (shopFilter) => set({ shopFilter }),
+  setWallsVisible: (wallsVisible) => set({ wallsVisible }),
+  setRoofVisible: (roofVisible) => set({ roofVisible }),
+  setDoorsOpen: (doorsOpen) => set({ doorsOpen }),
+  setPlayback: (patch) =>
+    set((state) => ({ playback: { ...state.playback, ...patch } })),
+
+  // Bump the nonce so the camera-reset hook fires alongside the toggle reset.
+  resetView: () =>
+    set((state) => ({ ...DEFAULT_VIEW, resetViewNonce: state.resetViewNonce + 1 })),
+  resetForNewScenario: () =>
+    set((state) => ({
+      screen: 'setup',
+      selectedTripId: null,
+      selectedCargoId: null,
+      shopFilter: null,
+      resetViewNonce: state.resetViewNonce + 1,
+      ...DEFAULT_VIEW,
+    })),
 }))
