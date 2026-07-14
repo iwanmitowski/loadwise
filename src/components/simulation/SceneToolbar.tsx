@@ -35,9 +35,13 @@ export function SceneToolbar() {
   const wallsVisible = useUiStore((s) => s.wallsVisible)
   const roofVisible = useUiStore((s) => s.roofVisible)
   const doorsOpen = useUiStore((s) => s.doorsOpen)
+  const labelsVisible = useUiStore((s) => s.labelsVisible)
+  const comVisible = useUiStore((s) => s.comVisible)
   const setWallsVisible = useUiStore((s) => s.setWallsVisible)
   const setRoofVisible = useUiStore((s) => s.setRoofVisible)
   const setDoorsOpen = useUiStore((s) => s.setDoorsOpen)
+  const setLabelsVisible = useUiStore((s) => s.setLabelsVisible)
+  const setComVisible = useUiStore((s) => s.setComVisible)
   const resetView = useUiStore((s) => s.resetView)
 
   return (
@@ -59,6 +63,18 @@ export function SceneToolbar() {
         icon="⧉"
         active={doorsOpen}
         onClick={() => setDoorsOpen(!doorsOpen)}
+      />
+      <ToggleButton
+        label="Labels"
+        icon="🏷"
+        active={labelsVisible}
+        onClick={() => setLabelsVisible(!labelsVisible)}
+      />
+      <ToggleButton
+        label="Balance"
+        icon="⊕"
+        active={comVisible}
+        onClick={() => setComVisible(!comVisible)}
       />
       <button
         type="button"

@@ -21,6 +21,10 @@ export type UiState = {
   wallsVisible: boolean
   roofVisible: boolean
   doorsOpen: boolean
+  /** Cargo labels (template names) on the 3D boxes (T13). */
+  labelsVisible: boolean
+  /** Center-of-mass marker on the 3D scene (T13). */
+  comVisible: boolean
   playback: Playback
   /**
    * Monotonic counter bumped whenever the view is reset. The 3D camera-reset
@@ -37,6 +41,8 @@ export type UiState = {
   setWallsVisible(visible: boolean): void
   setRoofVisible(visible: boolean): void
   setDoorsOpen(open: boolean): void
+  setLabelsVisible(visible: boolean): void
+  setComVisible(visible: boolean): void
   setPlayback(patch: Partial<Playback>): void
   /** Reset the 3D view toggles + playback to defaults (keeps screen/selection). */
   resetView(): void
@@ -52,10 +58,13 @@ const DEFAULT_PLAYBACK: Playback = {
 }
 
 // Roof hidden by default so the loaded cargo is visible from above; walls on.
+// Labels on (they self-declutter by distance); CoM marker off (opt-in diagnostic).
 const DEFAULT_VIEW = {
   wallsVisible: true,
   roofVisible: false,
   doorsOpen: false,
+  labelsVisible: true,
+  comVisible: false,
   playback: DEFAULT_PLAYBACK,
 } as const
 
@@ -74,6 +83,8 @@ export const useUiStore = create<UiState>((set) => ({
   setWallsVisible: (wallsVisible) => set({ wallsVisible }),
   setRoofVisible: (roofVisible) => set({ roofVisible }),
   setDoorsOpen: (doorsOpen) => set({ doorsOpen }),
+  setLabelsVisible: (labelsVisible) => set({ labelsVisible }),
+  setComVisible: (comVisible) => set({ comVisible }),
   setPlayback: (patch) =>
     set((state) => ({ playback: { ...state.playback, ...patch } })),
 
