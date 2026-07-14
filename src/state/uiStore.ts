@@ -10,6 +10,8 @@ export type Playback = {
   speed: PlaybackSpeed
   /** Step index within the active animation (loading order / delivery stop). */
   index: number
+  /** Delivery mode only (T15): advance to the next stop automatically. */
+  autoPlay: boolean
 }
 
 export type UiState = {
@@ -55,6 +57,7 @@ const DEFAULT_PLAYBACK: Playback = {
   playing: false,
   speed: 1,
   index: 0,
+  autoPlay: false,
 }
 
 // Roof hidden by default so the loaded cargo is visible from above; walls on.

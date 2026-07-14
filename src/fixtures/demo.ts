@@ -204,3 +204,94 @@ export const demoSideDoorResult: OptimizationResult = {
   overallScore: overallScore([sideDoorMetrics], []),
   elapsedMs: 0,
 }
+
+// --- Blocking variant (T15) ---
+// Deliberately "badly packed" 4-item load on the box-truck: shop-2's large box
+// (delivered at stop 2) sits directly in front of shop-3's (stop 1) on the way
+// to the rear door, so unloading stop 1 requires one temporary blocker move
+// (extraUnloadingMoves = 1). shop-2's medium box also fronts shop-1's pallet,
+// but by stop 3 it is already delivered — no extra move there. Layout:
+//   z 540–620, x 120–240 → shop-1 standard-pallet   (stop 3)
+//   z  60–120, x   0–80  → shop-3 large-box         (stop 1, blocked)
+//   z   0–60,  x   0–80  → shop-2 large-box         (stop 2, THE blocker)
+//   z   0–40,  x 120–180 → shop-2 medium-box        (stop 2)
+
+const blockingShops: Shop[] = [
+  {
+    id: 'shop-1',
+    name: 'Metro Market',
+    type: 'supermarket',
+    deliveryOrder: 3,
+    preferredDoor: 'rear',
+    requestedCargo: [{ id: 'shop-1-c1', templateId: 'standard-pallet', shopId: 'shop-1' }],
+  },
+  {
+    id: 'shop-2',
+    name: 'Hop Cellar',
+    type: 'beverage-store',
+    deliveryOrder: 2,
+    preferredDoor: 'rear',
+    requestedCargo: [
+      { id: 'shop-2-c1', templateId: 'large-box', shopId: 'shop-2' },
+      { id: 'shop-2-c2', templateId: 'medium-box', shopId: 'shop-2' },
+    ],
+  },
+  {
+    id: 'shop-3',
+    name: 'Volt Hub',
+    type: 'electronics-store',
+    deliveryOrder: 1,
+    preferredDoor: 'rear',
+    requestedCargo: [{ id: 'shop-3-c1', templateId: 'large-box', shopId: 'shop-3' }],
+  },
+]
+
+export const demoBlockingScenario: Scenario = {
+  config: {
+    seed: 'demo-blocking',
+    vehicleId: 'box-truck',
+    sideDoor: 'none',
+    shopCount: 3,
+  },
+  vehicle: buildScenarioVehicle('box-truck', 'none'),
+  shops: blockingShops,
+}
+
+const blockingPlacements: CargoPlacement[] = [
+  { cargoId: 'shop-1-c1', tripId: 'trip-1', position: { x: 120, y: 0, z: 540 }, rotationY: 0, loadingOrder: 1, assignedDoor: 'rear' },
+  { cargoId: 'shop-3-c1', tripId: 'trip-1', position: { x: 0, y: 0, z: 60 }, rotationY: 0, loadingOrder: 2, assignedDoor: 'rear' },
+  { cargoId: 'shop-2-c1', tripId: 'trip-1', position: { x: 0, y: 0, z: 0 }, rotationY: 0, loadingOrder: 3, assignedDoor: 'rear' },
+  { cargoId: 'shop-2-c2', tripId: 'trip-1', position: { x: 120, y: 0, z: 0 }, rotationY: 0, loadingOrder: 4, assignedDoor: 'rear' },
+]
+
+const blockingStops: DeliveryStop[] = [
+  { shopId: 'shop-3', stopNumber: 1, door: 'rear' },
+  { shopId: 'shop-2', stopNumber: 2, door: 'rear' },
+  { shopId: 'shop-1', stopNumber: 3, door: 'rear' },
+]
+
+const blockingMetrics = buildTripMetrics(
+  { placements: blockingPlacements, deferredCargo: [], stops: blockingStops },
+  demoBlockingScenario,
+  4,
+  DEFAULT_OPTIMIZER_CONFIG,
+)
+
+export const demoBlockingResult: OptimizationResult = {
+  seed: 'demo-blocking',
+  vehicleId: 'box-truck',
+  trips: [
+    {
+      id: 'trip-1',
+      tripNumber: 1,
+      stops: blockingStops,
+      placements: blockingPlacements,
+      deferredCargo: [],
+      metrics: blockingMetrics,
+    },
+  ],
+  unplaceableCargo: [],
+  warnings: [],
+  overallScore: overallScore([blockingMetrics], []),
+  elapsedMs: 0,
+}
