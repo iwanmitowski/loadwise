@@ -14,6 +14,11 @@ const FRAGILE_EDGE = '#f8fafc'
 type CargoBoxProps = {
   item: CargoRenderItem
   labelsVisible: boolean
+  /**
+   * Registers this box's mesh in the layer's cargoId → mesh map (null on
+   * unmount). The loading animator (T14) drives positions through that map.
+   */
+  registerMesh?: (cargoId: string, mesh: Mesh | null) => void
 }
 
 /**
@@ -25,7 +30,7 @@ type CargoBoxProps = {
  * Selection/filter state is read via *derived* selectors so a selection change
  * only re-renders the two boxes whose selected-ness actually flips, not all 100.
  */
-export function CargoBox({ item, labelsVisible }: CargoBoxProps) {
+export function CargoBox({ item, labelsVisible, registerMesh }: CargoBoxProps) {
   const [w, h, d] = item.sceneSize
   const selected = useUiStore((s) => s.selectedCargoId === item.cargoId)
   const shopFilter = useUiStore((s) => s.shopFilter)
@@ -36,6 +41,7 @@ export function CargoBox({ item, labelsVisible }: CargoBoxProps) {
 
   return (
     <mesh
+      ref={(mesh: Mesh | null) => registerMesh?.(item.cargoId, mesh)}
       position={item.center}
       castShadow
       receiveShadow

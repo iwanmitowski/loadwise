@@ -1,7 +1,9 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Line } from '@react-three/drei'
+import type { Mesh } from 'three'
 import type { DeliveryTrip, Scenario } from '@/types'
 import { useUiStore } from '@/state/uiStore'
+import { LoadingAnimator } from '../Animations'
 import { CargoBox } from './CargoBox'
 import { buildCargoRenderItems, centerOfMass } from './cargoModel'
 
@@ -23,6 +25,7 @@ export function CargoLayer({
   const labelsVisible = useUiStore((s) => s.labelsVisible)
   const comVisible = useUiStore((s) => s.comVisible)
   const setSelectedCargo = useUiStore((s) => s.setSelectedCargo)
+  const playbackMode = useUiStore((s) => s.playback.mode)
 
   const items = useMemo(
     () => buildCargoRenderItems(trip, scenario),
@@ -30,12 +33,43 @@ export function CargoLayer({
   )
   const com = useMemo(() => centerOfMass(items), [items])
 
+  // cargoId → mesh registry, filled by CargoBox ref callbacks. The loading
+  // animator (T14) drives box transforms through it.
+  const meshes = useRef(new Map<string, Mesh>()).current
+  const registerMesh = useCallback(
+    (cargoId: string, mesh: Mesh | null) => {
+      if (mesh) meshes.set(cargoId, mesh)
+      else meshes.delete(cargoId)
+    },
+    [meshes],
+  )
+
+  // State-machine guard (T14): this layer unmounting mid-playback — trip
+  // switch (keyed remount), regeneration, leaving the screen — resets playback
+  // to idle so no animator or refs are left orphaned.
+  useEffect(() => {
+    return () => {
+      const ui = useUiStore.getState()
+      if (ui.playback.mode !== 'idle') {
+        ui.setPlayback({ mode: 'idle', playing: false, index: 0 })
+      }
+    }
+  }, [])
+
   return (
     <group onPointerMissed={() => setSelectedCargo(null)}>
       {items.map((item) => (
-        <CargoBox key={item.cargoId} item={item} labelsVisible={labelsVisible} />
+        <CargoBox
+          key={item.cargoId}
+          item={item}
+          labelsVisible={labelsVisible}
+          registerMesh={registerMesh}
+        />
       ))}
       {comVisible && com ? <CenterOfMassMarker center={com.center} /> : null}
+      {playbackMode === 'loading' ? (
+        <LoadingAnimator items={items} vehicle={scenario.vehicle} meshes={meshes} />
+      ) : null}
     </group>
   )
 }

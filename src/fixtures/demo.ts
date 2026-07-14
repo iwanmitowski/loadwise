@@ -148,3 +148,59 @@ export const demoResult: OptimizationResult = {
   overallScore: overallScore([metrics], []),
   elapsedMs: 0,
 }
+
+// --- Side-door variant (T14) ---
+// Same layout on the box-truck with the LEFT side door fitted; shop-2's cargo
+// loads/unloads through it (rear door for the rest). Exists so the side-door
+// loading-animation staging path has a deterministic fixture to exercise.
+
+export const demoSideDoorScenario: Scenario = {
+  config: {
+    seed: 'demo-side',
+    vehicleId: 'box-truck',
+    sideDoor: 'left',
+    shopCount: 3,
+  },
+  vehicle: buildScenarioVehicle('box-truck', 'left'),
+  shops,
+}
+
+const sideDoorPlacements: CargoPlacement[] = placements.map((p) =>
+  p.cargoId.startsWith('shop-2') ? { ...p, assignedDoor: 'left' } : p,
+)
+
+const sideDoorStops: DeliveryStop[] = stops.map((s) =>
+  s.shopId === 'shop-2' ? { ...s, door: 'left' } : s,
+)
+
+const sideDoorMetrics = buildTripMetrics(
+  { placements: sideDoorPlacements, deferredCargo, stops: sideDoorStops },
+  demoSideDoorScenario,
+  10,
+  DEFAULT_OPTIMIZER_CONFIG,
+)
+
+export const demoSideDoorResult: OptimizationResult = {
+  seed: 'demo-side',
+  vehicleId: 'box-truck',
+  trips: [
+    {
+      id: 'trip-1',
+      tripNumber: 1,
+      stops: sideDoorStops,
+      placements: sideDoorPlacements,
+      deferredCargo,
+      metrics: sideDoorMetrics,
+    },
+  ],
+  unplaceableCargo: [],
+  warnings: [
+    {
+      code: 'deferred-cargo',
+      message: '1 item(s) moved to trip 2.',
+      tripId: 'trip-1',
+    },
+  ],
+  overallScore: overallScore([sideDoorMetrics], []),
+  elapsedMs: 0,
+}
