@@ -7,6 +7,8 @@ import { SceneToolbar } from '@/components/simulation/SceneToolbar'
 import { CargoInfoPanel } from '@/components/simulation/CargoInfoPanel'
 import { PlaybackControls } from '@/components/simulation/PlaybackControls'
 import { DeliveryPanel } from '@/components/simulation/DeliveryPanel'
+import { TripSelector } from '@/components/simulation/TripSelector'
+import { ShopLegend } from '@/components/simulation/ShopLegend'
 
 /**
  * Simulation screen — the interactive 3D view of the loaded vehicle.
@@ -63,14 +65,16 @@ export function ScreenSimulation() {
         </div>
       ) : null}
 
-      {/* Trip caption — full transport arrives with T14–T15. */}
-      <div className="pointer-events-none absolute left-4 top-4 rounded-md border border-slate-700/60 bg-slate-900/70 px-3 py-2 text-sm text-slate-200 backdrop-blur">
+      {/* Trip selector + shop legend (shared with the Report screen). */}
+      <div className="pointer-events-auto absolute left-4 top-4 flex w-56 flex-col gap-3 rounded-lg border border-slate-700/60 bg-slate-900/75 p-3 text-sm text-slate-200 backdrop-blur">
         <span className="font-semibold">{scenario.vehicle.name}</span>
+        {result.trips.length > 1 ? <TripSelector trips={result.trips} /> : null}
         {trip ? (
-          <span className="text-slate-400">
-            {' · '}Trip {trip.tripNumber} · {trip.placements.length} placement(s) ·{' '}
-            {trip.stops.length} stop(s)
-          </span>
+          <ShopLegend
+            trip={trip}
+            scenario={scenario}
+            alsoWarnShopIds={result.unplaceableCargo.map((u) => u.shopId)}
+          />
         ) : null}
       </div>
     </div>

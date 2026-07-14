@@ -1,17 +1,47 @@
+import { useMemo } from 'react'
 import { useOptimizationStore } from '@/state/optimizationStore'
+import { useScenarioStore } from '@/state/scenarioStore'
+import { useUiStore } from '@/state/uiStore'
+import { buildReportModel } from '@/features/reports/reportModel'
+import { SeedBadge } from '@/components/planning/SeedBadge'
+import { TripSelector } from '@/components/simulation/TripSelector'
+import {
+  buildPlacementTripNumbers,
+  buildTemplateNames,
+} from '@/components/report/reportView'
+import { ScoreBadge } from '@/components/report/ScoreBadge'
+import { MetricGrid } from '@/components/report/MetricGrid'
+import { WarningsPanel } from '@/components/report/WarningsPanel'
+import { DeferredTable } from '@/components/report/DeferredTable'
+import { UnplaceableTable } from '@/components/report/UnplaceableTable'
+import { ExportButtons } from '@/components/report/ExportButtons'
 
 /**
- * Report screen — placeholder shell (T16 fills in the real report).
- *
- * Layout slots to own later:
- *  - overall score + per-trip metric cards
- *  - warnings list, unplaceable/deferred cargo breakdown
- *  - export / share actions
+ * Optimization Report — pure presentation over T08's `buildReportModel`. The UI
+ * does no metric math; it only formats, picks colors/icons, and derives each
+ * deferred item's destination trip. Selected-trip view driven by the shared
+ * TripSelector (also on the Simulation screen).
  */
 export function ScreenReport() {
   const result = useOptimizationStore((s) => s.result)
+  const scenario = useScenarioStore((s) => s.scenario)
+  const selectedTripId = useUiStore((s) => s.selectedTripId)
 
-  if (!result) {
+  const model = useMemo(
+    () => (result && scenario ? buildReportModel(result, scenario) : null),
+    [result, scenario],
+  )
+  const templateNames = useMemo(
+    () => (scenario ? buildTemplateNames(scenario) : new Map<string, string>()),
+    [scenario],
+  )
+  const tripByCargo = useMemo(
+    () => (result ? buildPlacementTripNumbers(result) : new Map<string, number>()),
+    [result],
+  )
+
+  // Screen is gated on a result, but stay defensive.
+  if (!result || !scenario || !model) {
     return (
       <div className="p-8 text-sm text-slate-400">
         No optimization result yet — run the optimizer on the Planning screen.
@@ -19,19 +49,76 @@ export function ScreenReport() {
     )
   }
 
+  const selectedTrip =
+    model.trips.find((t) => t.tripId === selectedTripId) ?? model.trips[0] ?? null
+
+  // Result-level warnings apply to every trip; append the selected trip's own.
+  const warnings = selectedTrip
+    ? [...model.warnings, ...selectedTrip.warnings]
+    : model.warnings
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-4 p-8">
-      <div>
-        <h2 className="text-xl font-semibold">Report</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Placeholder — the full report arrives with T16.
-        </p>
-      </div>
-      <div className="rounded-lg bg-slate-900 p-4 text-sm">
-        Overall score: <span className="font-semibold">{result.overallScore}</span> ·{' '}
-        {result.trips.length} trip(s) · {result.warnings.length} warning(s) ·{' '}
-        {result.unplaceableCargo.length} unplaceable
-      </div>
+    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6 sm:p-8">
+      {/* Overall header */}
+      <header className="flex flex-wrap items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+        <ScoreBadge score={model.overallScore} label="Overall score" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h2 className="text-xl font-semibold text-slate-100">{model.vehicleName}</h2>
+          <p className="text-sm text-slate-400">
+            {model.tripCount} trip{model.tripCount === 1 ? '' : 's'} ·{' '}
+            {model.totals.loadedUnits} / {model.totals.requestedUnits} units loaded ·
+            optimized in {Math.round(model.elapsedMs)} ms
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <SeedBadge seed={model.seed} />
+          </div>
+        </div>
+        <ExportButtons scenario={scenario} result={result} />
+      </header>
+
+      {/* Trip selector (selected-trip view) */}
+      {model.trips.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <TripSelector trips={result.trips} />
+        </section>
+      )}
+
+      {selectedTrip ? (
+        <>
+          <section>
+            <SectionTitle>Trip {selectedTrip.tripNumber} metrics</SectionTitle>
+            <MetricGrid trip={selectedTrip} />
+          </section>
+
+          <section>
+            <SectionTitle>Warnings</SectionTitle>
+            <WarningsPanel warnings={warnings} />
+          </section>
+
+          <section>
+            <SectionTitle>Deferred cargo</SectionTitle>
+            <DeferredTable
+              items={selectedTrip.deferredCargo}
+              templateNames={templateNames}
+              tripByCargo={tripByCargo}
+            />
+          </section>
+        </>
+      ) : null}
+
+      {/* Unplaceable is permanent and result-level — always shown. */}
+      <section>
+        <SectionTitle>Unplaceable cargo</SectionTitle>
+        <UnplaceableTable items={model.unplaceableCargo} templateNames={templateNames} />
+      </section>
     </div>
+  )
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+      {children}
+    </h3>
   )
 }
