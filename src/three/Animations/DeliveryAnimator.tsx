@@ -8,13 +8,18 @@
 // and the only store writes are discrete — auto-advancing to the next stop
 // (auto-play) or pausing when a stop's choreography completes.
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import type { Mesh } from 'three'
 import type { DeliveryTrip, DoorSide, Scenario } from '@/types'
 import { useUiStore } from '@/state/uiStore'
 import type { CargoRenderItem } from '../CargoLayer/cargoModel'
-import { stopStateAt, type StopPlan, type StopState } from './deliveryTimeline'
+import {
+  itemDeliveredNow,
+  stopStateAt,
+  type StopPlan,
+  type StopState,
+} from './deliveryTimeline'
 import { pathAt, pathPoints, type ItemPath, type Vec3Tuple } from './loadingTimeline'
 import { deliveryClock, resetDeliveryClock } from './playbackClock'
 import { clearPulse, setPulse } from './pulse'
@@ -40,13 +45,19 @@ export function DeliveryAnimator({ trip, scenario, items, meshes }: DeliveryAnim
   const timeline = useDeliveryTimeline(trip, scenario, items)
   const { plan, pathsByStop, blockerSlotsByStop, durations, deliveredAtStop } = timeline
 
+  // Last balance point published to the store, as a stable key, so the frame
+  // loop only writes when the aboard set actually changes (a box handed off) —
+  // not every frame.
+  const lastComKey = useRef<string | null>(null)
+
   // Entering delivery mode starts the route from stop 0 with all cargo
   // restored — the mount reset plus the frame loop below guarantee both.
   useEffect(() => {
     resetDeliveryClock(durations[0] ?? 0)
   }, [durations])
 
-  // Restore exact placed transforms when the animator leaves the scene.
+  // Restore exact placed transforms when the animator leaves the scene, and
+  // hand the balance point back to the full-load centroid.
   useEffect(() => {
     return () => {
       for (const item of items) {
@@ -58,6 +69,8 @@ export function DeliveryAnimator({ trip, scenario, items, meshes }: DeliveryAnim
         clearPulse(mesh)
       }
       resetDeliveryClock(0)
+      lastComKey.current = null
+      useUiStore.getState().setLiveComCenter(null)
     }
   }, [items, meshes])
 
@@ -106,6 +119,28 @@ export function DeliveryAnimator({ trip, scenario, items, meshes }: DeliveryAnim
       if (!mesh) continue
       applyItemState(mesh, item, stopIndex, state, stop, paths, slots, deliveredAtStop)
     }
+
+    // Recompute the balance point from the cargo still aboard, so the marker
+    // shifts as boxes are delivered. Weighted centroid, inlined to keep the
+    // frame loop allocation-free; published only when it changes.
+    let w = 0
+    let cx = 0
+    let cy = 0
+    let cz = 0
+    for (const item of items) {
+      if (itemDeliveredNow(item.cargoId, stopIndex, state, stop, deliveredAtStop)) continue
+      w += item.weightKg
+      cx += item.center[0] * item.weightKg
+      cy += item.center[1] * item.weightKg
+      cz += item.center[2] * item.weightKg
+    }
+    const center: [number, number, number] | null =
+      w > 0 ? [cx / w, cy / w, cz / w] : null
+    const key = center ? `${center[0]},${center[1]},${center[2]}` : null
+    if (key !== lastComKey.current) {
+      lastComKey.current = key
+      ui.setLiveComCenter(center)
+    }
   })
 
   return null
@@ -128,12 +163,10 @@ function applyItemState(
 ) {
   const deliveredAt = deliveredAtStop.get(item.cargoId)
 
-  // Gone: delivered at an earlier stop (or at this stop once the route moved
-  // past it — 'done' counts the current stop as delivered).
-  if (
-    deliveredAt !== undefined &&
-    (deliveredAt < stopIndex || (deliveredAt === stopIndex && state.phase === 'done'))
-  ) {
+  // Gone: handed off already (earlier stop, this stop once done, or its own
+  // deliver op within this stop has completed). Same predicate drives the
+  // balance point, so what you see and what's weighed never diverge.
+  if (itemDeliveredNow(item.cargoId, stopIndex, state, stop, deliveredAtStop)) {
     mesh.visible = false
     clearPulse(mesh)
     return
@@ -198,14 +231,8 @@ function applyItemState(
         ? stop.ops
         : []
 
-  const wasDelivered =
-    isStopCargo && opsSoFar.some((op) => op.type === 'deliver' && op.cargoId === item.cargoId)
-  if (wasDelivered) {
-    mesh.visible = false
-    clearPulse(mesh)
-    return
-  }
-
+  // (Items whose own deliver op already completed are handled by the
+  // itemDeliveredNow early-return above.)
   const movedOut = opsSoFar.some(
     (op) => op.type === 'move-blocker-out' && op.cargoId === item.cargoId,
   )

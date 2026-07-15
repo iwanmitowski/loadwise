@@ -24,6 +24,7 @@ export function CargoLayer({
 }) {
   const labelsVisible = useUiStore((s) => s.labelsVisible)
   const comVisible = useUiStore((s) => s.comVisible)
+  const liveComCenter = useUiStore((s) => s.liveComCenter)
   const setSelectedCargo = useUiStore((s) => s.setSelectedCargo)
   const playbackMode = useUiStore((s) => s.playback.mode)
 
@@ -32,6 +33,12 @@ export function CargoLayer({
     [trip, scenario],
   )
   const com = useMemo(() => centerOfMass(items), [items])
+
+  // During delivery the balance point tracks the cargo still aboard (published
+  // by the DeliveryAnimator as boxes leave); otherwise it's the full-load
+  // centroid. When delivery has emptied the truck there's nothing to mark.
+  const comCenter =
+    playbackMode === 'delivery' ? liveComCenter : (com?.center ?? null)
 
   // cargoId → mesh registry, filled by CargoBox ref callbacks. The loading
   // animator (T14) drives box transforms through it.
@@ -59,7 +66,7 @@ export function CargoLayer({
           registerMesh={registerMesh}
         />
       ))}
-      {comVisible && com ? <CenterOfMassMarker center={com.center} /> : null}
+      {comVisible && comCenter ? <CenterOfMassMarker center={comCenter} /> : null}
       {playbackMode === 'loading' ? (
         <LoadingAnimator items={items} vehicle={scenario.vehicle} meshes={meshes} />
       ) : null}

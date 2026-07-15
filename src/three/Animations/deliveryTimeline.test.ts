@@ -9,9 +9,11 @@ import {
   blockerStagingSlot,
   buildRoutePlan,
   distanceToDoor,
+  itemDeliveredNow,
   stopDuration,
   stopStateAt,
   DELIVERY_PHASE_S,
+  type StopState,
 } from './deliveryTimeline'
 import { pathAt } from './loadingTimeline'
 
@@ -74,6 +76,53 @@ describe('buildRoutePlan — demo fixture', () => {
 
   it('same-distance unload order is id-stable', () => {
     expect(plan.stops[1].deliverIds).toEqual(['shop-2-c1', 'shop-2-c2', 'shop-2-c3'])
+  })
+})
+
+describe('itemDeliveredNow — balance/visibility predicate', () => {
+  // Blocking route delivers: shop-3-c1 @ stop 0, shop-2-c1 & shop-2-c2 @ stop 1,
+  // shop-1-c1 @ stop 2.
+  const plan = buildRoutePlan(blockingTrip, demoBlockingScenario)
+  const deliveredAtStop = new Map<string, number>()
+  plan.stops.forEach((stop, i) => stop.deliverIds.forEach((id) => deliveredAtStop.set(id, i)))
+
+  const state = (phase: StopState['phase'], opIndex: number | null = null): StopState => ({
+    phase,
+    opIndex,
+    opProgress: 0,
+    doorOpen: false,
+  })
+
+  it('nothing is delivered before its stop begins its ops', () => {
+    const stop = plan.stops[0]
+    const at = (id: string) => itemDeliveredNow(id, 0, state('highlight'), stop, deliveredAtStop)
+    expect(at('shop-3-c1')).toBe(false)
+    expect(at('shop-2-c1')).toBe(false)
+    expect(at('shop-1-c1')).toBe(false)
+  })
+
+  it("a stop's cargo counts as delivered once the stop is done", () => {
+    const stop = plan.stops[0]
+    expect(itemDeliveredNow('shop-3-c1', 0, state('done'), stop, deliveredAtStop)).toBe(true)
+  })
+
+  it('cargo delivered at an earlier stop stays delivered at later stops', () => {
+    const stop = plan.stops[1]
+    expect(itemDeliveredNow('shop-3-c1', 1, state('door-open'), stop, deliveredAtStop)).toBe(true)
+    // this stop's own cargo is still aboard at the very start of the stop
+    expect(itemDeliveredNow('shop-2-c1', 1, state('door-open'), stop, deliveredAtStop)).toBe(false)
+  })
+
+  it('within a stop, an item is delivered only after its own deliver op completes', () => {
+    const stop = plan.stops[1] // ops: deliver shop-2-c1, deliver shop-2-c2
+    // sliding the 2nd box (opIndex 1): the 1st is already handed off, the 2nd is not
+    const midStop = state('op', 1)
+    expect(itemDeliveredNow('shop-2-c1', 1, midStop, stop, deliveredAtStop)).toBe(true)
+    expect(itemDeliveredNow('shop-2-c2', 1, midStop, stop, deliveredAtStop)).toBe(false)
+  })
+
+  it('an item with no delivery stop is never delivered', () => {
+    expect(itemDeliveredNow('ghost', 0, state('done'), plan.stops[0], deliveredAtStop)).toBe(false)
   })
 })
 
