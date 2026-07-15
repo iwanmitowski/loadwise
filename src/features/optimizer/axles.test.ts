@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RigidAxleModel, SemiAxleModel } from '@/types'
 import type { PlacedBox } from './geometry'
 import {
+  axleComplianceScore,
   axleScore,
   itemSupportDelta,
   overloadBreaches,
@@ -111,5 +112,28 @@ describe('axleScore', () => {
     const heavy = axleScore(supportLoads([box('x', 0, 9000)], RIGID), RIGID)
     expect(light).toBeGreaterThan(heavy)
     expect(heavy).toBeLessThanOrEqual(0.05)
+  })
+})
+
+describe('axleComplianceScore (report-quality grading)', () => {
+  it('gives full marks to a comfortably-legal load, unlike axleScore', () => {
+    // 3t centred: both axles well within max, steer share healthy → 1.0.
+    const loads = supportLoads([box('x', 250, 3000)], RIGID)
+    expect(axleComplianceScore(loads, RIGID)).toBe(1)
+    // The margin-based placement score, by contrast, docks it for using capacity.
+    expect(axleScore(loads, RIGID)).toBeLessThan(1)
+  })
+
+  it('drops toward 0 as an axle exceeds its plated max', () => {
+    // 12t on the rear axle → 14.2t > 11.5t max (worst use ≈ 1.23) → 0.
+    const over = supportLoads([box('h', 0, 12000)], RIGID)
+    expect(axleComplianceScore(over, RIGID)).toBe(0)
+  })
+
+  it('drops when the steering axle is starved', () => {
+    // Rear-overhang load levers the steer axle below its min share.
+    const starved = supportLoads([box('o', -150, 6000)], RIGID)
+    expect(starved.aKg / starved.totalKg).toBeLessThan(0.2)
+    expect(axleComplianceScore(starved, RIGID)).toBeLessThan(1)
   })
 })

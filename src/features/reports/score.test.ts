@@ -13,6 +13,7 @@ const withScore = (overallScoreValue: number): OptimizationMetrics => ({
   emptyVolumeCm3: 0,
   leftRightBalance: 1,
   frontRearBalance: 1,
+  longitudinalStability: 1,
   blockedCargoCount: 0,
   extraUnloadingMoves: 0,
   splitShopIds: [],
@@ -28,14 +29,14 @@ const permanent: UnplacedCargo = {
 }
 
 describe('computeTripScore', () => {
-  it('returns 0 for an empty trip regardless of balances', () => {
+  it('returns 0 for an empty trip regardless of the other inputs', () => {
     expect(
       computeTripScore({
         loadedUnits: 0,
         volumeUtilization: 0,
         weightUtilization: 0,
         leftRightBalance: 1,
-        frontRearBalance: 1,
+        longitudinalStability: 1,
         blockedCargoCount: 0,
         splitShopCount: 0,
         stopCount: 0,
@@ -50,7 +51,7 @@ describe('computeTripScore', () => {
         volumeUtilization: 1,
         weightUtilization: 1,
         leftRightBalance: 1,
-        frontRearBalance: 1,
+        longitudinalStability: 1,
         blockedCargoCount: 0,
         splitShopCount: 0,
         stopCount: 2,
@@ -59,20 +60,36 @@ describe('computeTripScore', () => {
   })
 
   it('weights each component per SCORE_WEIGHTS', () => {
-    // volume .5 → 12.5, weight 0, balance (0.9+0.7)/2=0.8 → 16, accessibility
-    // 1−1/4=0.75 → 18.75, delivery 1−1/2=0.5 → 7.5. Sum = 54.75 → 55.
+    // accessibility 1−1/4=0.75 → 18.75; stability 0.8 → 20; lateral 0.9 → 13.5;
+    // utilization max(0.5,0)=0.5 → 10; delivery 1−1/2=0.5 → 7.5. Sum 69.75 → 70.
     expect(
       computeTripScore({
         loadedUnits: 4,
         volumeUtilization: 0.5,
         weightUtilization: 0,
         leftRightBalance: 0.9,
-        frontRearBalance: 0.7,
+        longitudinalStability: 0.8,
         blockedCargoCount: 1,
         splitShopCount: 1,
         stopCount: 2,
       }),
-    ).toBe(55)
+    ).toBe(70)
+  })
+
+  it('utilization takes the binding dimension: a weight-limited load is full', () => {
+    // weight 0.95 but volume 0.30 → utilization = 0.95, not 0.30.
+    const dense = computeTripScore({
+      loadedUnits: 2,
+      volumeUtilization: 0.3,
+      weightUtilization: 0.95,
+      leftRightBalance: 1,
+      longitudinalStability: 1,
+      blockedCargoCount: 0,
+      splitShopCount: 0,
+      stopCount: 1,
+    })
+    // access 25 + stability 25 + lateral 15 + util 0.95×20=19 + delivery 15 = 99.
+    expect(dense).toBe(99)
   })
 })
 

@@ -7,6 +7,7 @@
 
 import { getTemplate, itemVolume } from '@/features/cargo/templates'
 import { findBlockers } from '@/features/optimizer/accessibility'
+import { axleComplianceScore, supportLoads } from '@/features/optimizer/axles'
 import { toPlacedBox, type PlacedBox } from '@/features/optimizer/geometry'
 import { validateLoad } from '@/features/optimizer/validate'
 import type {
@@ -77,13 +78,14 @@ export function buildTripMetrics(
 
   const splitShopIds = deriveSplitShopIds(trip, shopByCargo)
   const constraintViolations = validateLoad(trip.placements, scenario, config).length
+  const longitudinalStability = longitudinalStabilityScore(boxes, vehicle, split)
 
   const overallScore = computeTripScore({
     loadedUnits,
     volumeUtilization,
     weightUtilization,
     leftRightBalance,
-    frontRearBalance,
+    longitudinalStability,
     blockedCargoCount,
     splitShopCount: splitShopIds.length,
     stopCount: trip.stops.length,
@@ -100,6 +102,7 @@ export function buildTripMetrics(
     emptyVolumeCm3,
     leftRightBalance,
     frontRearBalance,
+    longitudinalStability,
     blockedCargoCount,
     extraUnloadingMoves,
     splitShopIds,
@@ -176,6 +179,29 @@ export function weightSplit(boxes: PlacedBox[], space: Scenario['vehicle']['carg
 export function tripWeightSplit(trip: TripInput, scenario: Scenario): WeightSplit {
   const boxes = resolveBoxes(trip.placements, cargoTemplateMap(scenario))
   return weightSplit(boxes, scenario.vehicle.cargoSpace)
+}
+
+/**
+ * Longitudinal stability 0..1 for the score (T22): axle-envelope compliance
+ * when the vehicle has axle geometry (full marks within limits, healthy steer
+ * share), else a forward-CoG proxy — mass toward the cabin is rewarded, mass on
+ * the rear overhang penalised. Deliberately NOT a 50/50 front–rear split: the
+ * planner loads forward on purpose (front-pack + axle scoring), so a 50/50
+ * target would grade the correct behaviour as an imbalance.
+ */
+export function longitudinalStabilityScore(
+  boxes: PlacedBox[],
+  vehicle: Scenario['vehicle'],
+  split: WeightSplit,
+): number {
+  if (vehicle.axles) {
+    return axleComplianceScore(supportLoads(boxes, vehicle.axles), vehicle.axles)
+  }
+  if (split.total === 0) return 1
+  // frontShare 0 = all on rear overhang, 1 = all at the cabin. Centre (0.5)
+  // scores 0.7; forward → up to 1; rear-biased → down toward 0.
+  const frontShare = split.front / split.total
+  return Math.max(0, Math.min(1, 0.7 + (frontShare - 0.5) * 1.2))
 }
 
 /** Portion of `weight` on the low side of `mid`, then the remainder, by width overlap. */

@@ -18,7 +18,9 @@ export function MetricGrid({ trip }: { trip: TripReport }) {
         <PercentBar label="Weight utilization" ratio={m.weightUtilization} />
         <PercentBar label="Volume utilization" ratio={m.volumeUtilization} />
         <PercentBar label="Left/right balance" ratio={m.leftRightBalance} />
-        <PercentBar label="Front/rear balance" ratio={m.frontRearBalance} />
+        {/* Longitudinal quality is axle/CoG compliance (forward loading is
+            good), not a 50/50 split — so it agrees with the trip score. */}
+        <PercentBar label="Load stability (axle/CoG)" ratio={m.longitudinalStability} />
       </div>
 
       {/* Scalar metrics. */}

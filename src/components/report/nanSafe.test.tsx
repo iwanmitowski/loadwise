@@ -19,6 +19,7 @@ const nanMetrics: OptimizationMetrics = {
   emptyVolumeCm3: 0,
   leftRightBalance: NaN,
   frontRearBalance: NaN,
+  longitudinalStability: NaN,
   blockedCargoCount: 0,
   extraUnloadingMoves: 0,
   splitShopIds: [],
