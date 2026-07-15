@@ -26,6 +26,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T18 | Integration hardening (15 edge cases) | all (lead A) | — | T04–T16 | [T18](prompts/T18-integration-hardening.md) | todo |
 | T19 | Test pass + Playwright smoke | all (lead C) | — | T18 | [T19](prompts/T19-test-pass.md) | todo |
 | T20 | Polish, README, final deploy, demo script | all (lead B) | — | T18 | [T20](prompts/T20-polish-and-ship.md) | todo |
+| T21 | Axle-load physics + door-true animation paths | A+B | ivan-mitovski | T07, T14 | [T21](prompts/T21-axle-physics.md) | done |
 
 ## Dependency shape
 

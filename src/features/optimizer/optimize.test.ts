@@ -11,7 +11,9 @@ import type {
 } from '@/types'
 import { generateScenario } from '@/features/scenario/generate'
 import type { VehicleId } from '@/types'
+import { overloadBreaches, supportLoads } from './axles'
 import { DEFAULT_OPTIMIZER_CONFIG as CFG } from './config'
+import { toPlacedBox } from './geometry'
 import { optimize } from './optimize'
 import { validateLoad } from './validate'
 
@@ -365,6 +367,65 @@ describe('optimize — front-packed loading (vehicle stability)', () => {
     // And the deepest band belongs to the last stop.
     const deepest = [...zRange.entries()].sort((a, b) => b[1].max - a[1].max)[0][0]
     expect(deepest).toBe('shop-3')
+  })
+})
+
+describe('optimize — axle legality (planning estimate)', () => {
+  // Regression: box-truck seed-34/5shops — the anti-split defer removed a
+  // rear-overhang box (negative front-axle contribution), RAISING the front
+  // axle past its plated max at departure. The defer must be abandoned when
+  // its removals breach an axle maximum.
+  it('anti-split defer never leaves a departure state over an axle max (seed-34)', () => {
+    const scenario = generateScenario({
+      seed: 'seed-34',
+      vehicleId: 'box-truck',
+      sideDoor: 'none',
+      shopCount: 5,
+    })
+    const result = optimize(scenario, CFG)
+    for (const trip of result.trips) {
+      const violations = validateLoad(trip.placements, scenario, CFG).filter(
+        (v) => v.code === 'axle-overload',
+      )
+      expect(violations).toEqual([])
+    }
+  })
+
+  it('departure AND every post-stop state stay under the plated maxima', () => {
+    for (const vehicleId of ['cargo-van', 'box-truck', 'semi-trailer'] as const) {
+      for (let s = 0; s < 10; s++) {
+        const scenario = generateScenario({
+          seed: `seed-${s}`,
+          vehicleId,
+          sideDoor: 'none',
+          shopCount: 4,
+        })
+        const model = scenario.vehicle.axles!
+        const cargoById = new Map(
+          scenario.shops.flatMap((sh) => sh.requestedCargo.map((c) => [c.id, c] as const)),
+        )
+        const shopByCargo = new Map(
+          scenario.shops.flatMap((sh) => sh.requestedCargo.map((c) => [c.id, c.shopId] as const)),
+        )
+        const result = optimize(scenario, CFG)
+        for (const trip of result.trips) {
+          let boxes = trip.placements.map((p) =>
+            toPlacedBox(p, getTemplate(cargoById.get(p.cargoId)!.templateId)),
+          )
+          const states = [boxes]
+          for (const stop of [...trip.stops].sort((a, b) => a.stopNumber - b.stopNumber)) {
+            boxes = boxes.filter((b) => shopByCargo.get(b.cargoId) !== stop.shopId)
+            if (boxes.length > 0) states.push(boxes)
+          }
+          for (const state of states) {
+            expect(
+              overloadBreaches(supportLoads(state, model), model),
+              `${vehicleId} seed-${s} ${trip.id}`,
+            ).toEqual([])
+          }
+        }
+      }
+    }
   })
 })
 

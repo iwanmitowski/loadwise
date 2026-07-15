@@ -1,4 +1,5 @@
 import type {
+  AxleModel,
   SideDoorChoice,
   VehicleDefinition,
   VehicleDoor,
@@ -20,8 +21,12 @@ type VehicleSpec = {
   maxPayloadKg: number
   rearDoor: { width: number; height: number }
   sideDoor: { width: number; height: number; z: number }
+  axles: AxleModel
 }
 
+// Axle geometry: invented-but-plausible PLANNING ESTIMATES for this fictional
+// fleet (docs/deep-research-cargo-loading.md — never present these as legal
+// checks). Z values are on the cargo-space axis: z=0 rear door, +z toward cab.
 const SPECS: Record<VehicleId, VehicleSpec> = {
   'cargo-van': {
     id: 'cargo-van',
@@ -30,6 +35,18 @@ const SPECS: Record<VehicleId, VehicleSpec> = {
     maxPayloadKg: 1200,
     rearDoor: { width: 150, height: 170 },
     sideDoor: { width: 110, height: 150, z: 110 },
+    // ~3.5t GVW van: wheelbase 370cm, rear axle 90cm in from the rear doors,
+    // front axle under the cab (beyond the 320cm bay). Tare 2,200kg.
+    axles: {
+      kind: 'rigid',
+      frontAxleZ: 460,
+      rearAxleZ: 90,
+      emptyFrontKg: 1250,
+      emptyRearKg: 950,
+      maxFrontKg: 1850,
+      maxRearKg: 2250,
+      minSteerShare: 0.2,
+    },
   },
   'box-truck': {
     id: 'box-truck',
@@ -38,6 +55,18 @@ const SPECS: Record<VehicleId, VehicleSpec> = {
     maxPayloadKg: 5000,
     rearDoor: { width: 220, height: 210 },
     sideDoor: { width: 200, height: 200, z: 210 },
+    // ~10.5t GVW rigid: wheelbase 480cm, rear axle 150cm in from the rear
+    // doors, front axle at the bay's cabin end. Tare 5,200kg.
+    axles: {
+      kind: 'rigid',
+      frontAxleZ: 630,
+      rearAxleZ: 150,
+      emptyFrontKg: 2800,
+      emptyRearKg: 2400,
+      maxFrontKg: 4300,
+      maxRearKg: 6500,
+      minSteerShare: 0.2,
+    },
   },
   'semi-trailer': {
     id: 'semi-trailer',
@@ -46,6 +75,20 @@ const SPECS: Record<VehicleId, VehicleSpec> = {
     maxPayloadKg: 24000,
     rearDoor: { width: 240, height: 250 },
     sideDoor: { width: 240, height: 250, z: 560 },
+    // Trailer-only stage-1 model (kingpin + tri-axle group; tractor-side
+    // redistribution is out of MVP scope). Kingpin 160cm behind the headboard,
+    // axle-group centre 250cm from the rear doors, Lk = 950cm. Tare 7,500kg;
+    // rated 12t kingpin / 27t axle group (Krone Cool Liner-like figures).
+    axles: {
+      kind: 'semi',
+      kingpinZ: 1200,
+      axleGroupZ: 250,
+      emptyKingpinKg: 3000,
+      emptyAxleGroupKg: 4500,
+      maxKingpinKg: 12000,
+      maxAxleGroupKg: 27000,
+      minKingpinShare: 0.15,
+    },
   },
 }
 
@@ -80,6 +123,7 @@ export function getVehicle(id: VehicleId): VehicleDefinition {
     cargoSpace: spec.cargoSpace,
     maxPayloadKg: spec.maxPayloadKg,
     doors: [rearDoor(spec), makeSideDoor(spec, 'left'), makeSideDoor(spec, 'right')],
+    axles: spec.axles,
   }
 }
 
@@ -101,6 +145,7 @@ export function buildScenarioVehicle(
     cargoSpace: spec.cargoSpace,
     maxPayloadKg: spec.maxPayloadKg,
     doors,
+    axles: spec.axles,
   }
 }
 

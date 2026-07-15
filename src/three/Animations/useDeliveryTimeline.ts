@@ -11,7 +11,12 @@ import {
   stopDuration,
   type RoutePlan,
 } from './deliveryTimeline'
-import { buildItemPath, type ItemPath, type Vec3Tuple } from './loadingTimeline'
+import {
+  buildItemPath,
+  itemObstacle,
+  type ItemPath,
+  type Vec3Tuple,
+} from './loadingTimeline'
 
 export type DeliveryTimeline = {
   plan: RoutePlan
@@ -39,13 +44,33 @@ export function useDeliveryTimeline(
     const durations: number[] = []
     const deliveredAtStop = new Map<string, number>()
 
+    const delivered = new Set<string>()
     plan.stops.forEach((stop, stopIndex) => {
       const paths = new Map<string, ItemPath>()
       const slots = new Map<string, Vec3Tuple>()
+      // Everything still aboard at this stop is solid for this stop's slides.
+      // Walk the op sequence so each mover also ignores items that already
+      // slid out earlier in the same stop (blockers first, then deliveries
+      // closest-to-door first — the doorway drains front to back).
+      const outside = new Set<string>()
       for (const op of stop.ops) {
         const item = itemById.get(op.cargoId)
-        if (!item || paths.has(op.cargoId)) continue
-        paths.set(op.cargoId, buildItemPath(item, scenario.vehicle, op.door))
+        if (!item) continue
+        if (op.type === 'return-blocker') {
+          outside.delete(op.cargoId)
+          continue
+        }
+        outside.add(op.cargoId)
+        if (paths.has(op.cargoId)) continue
+        const obstacles = items
+          .filter(
+            (i) =>
+              i.cargoId !== op.cargoId &&
+              !delivered.has(i.cargoId) &&
+              !outside.has(i.cargoId),
+          )
+          .map(itemObstacle)
+        paths.set(op.cargoId, buildItemPath(item, scenario.vehicle, op.door, obstacles))
       }
       stop.blockerIds.forEach((id, slot) => {
         const path = paths.get(id)
@@ -53,7 +78,10 @@ export function useDeliveryTimeline(
         const door = stop.ops.find((op) => op.cargoId === id)?.door ?? 'rear'
         slots.set(id, blockerStagingSlot(path.staging, door, slot))
       })
-      for (const id of stop.deliverIds) deliveredAtStop.set(id, stopIndex)
+      for (const id of stop.deliverIds) {
+        deliveredAtStop.set(id, stopIndex)
+        delivered.add(id)
+      }
 
       pathsByStop.push(paths)
       blockerSlotsByStop.push(slots)

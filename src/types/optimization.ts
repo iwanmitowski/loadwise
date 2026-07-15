@@ -43,6 +43,10 @@ export type WarningCode =
   | 'blocked-cargo'
   /** Items with no forward blocking chain to the front wall — need lashing. */
   | 'unsecured-cargo'
+  /** Axle/kingpin outside its envelope at departure (planning estimate). */
+  | 'axle-limit'
+  /** A load state AFTER some delivery stop breaches an axle/balance rule. */
+  | 'unsafe-after-stop'
   | 'empty-trip'
   | 'time-limit'
 

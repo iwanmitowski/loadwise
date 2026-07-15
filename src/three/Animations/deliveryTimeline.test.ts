@@ -13,7 +13,7 @@ import {
   stopStateAt,
   DELIVERY_PHASE_S,
 } from './deliveryTimeline'
-import { dogLegAt } from './loadingTimeline'
+import { pathAt } from './loadingTimeline'
 
 const blockingTrip = demoBlockingResult.trips[0]
 const demoTrip = demoResult.trips[0]
@@ -137,14 +137,18 @@ describe('geometry helpers', () => {
     expect(blockerStagingSlot(staging, 'left', 0)).toEqual(near([1.2, 0.3, -0.6]))
   })
 
-  it('dogLegAt hits from / via / to exactly at u = 0 / 0.5 / 1 and clamps', () => {
-    const from: [number, number, number] = [0, 0, 0]
-    const via: [number, number, number] = [1, 2, 3]
-    const to: [number, number, number] = [4, 4, 4]
-    expect(dogLegAt(0, from, via, to)).toEqual(from)
-    expect(dogLegAt(0.5, from, via, to)).toEqual(via)
-    expect(dogLegAt(1, from, via, to)).toEqual(to)
-    expect(dogLegAt(-1, from, via, to)).toEqual(from)
-    expect(dogLegAt(2, from, via, to)).toEqual(to)
+  it('pathAt hits every anchor exactly at its segment boundary and clamps', () => {
+    const pts: [number, number, number][] = [
+      [0, 0, 0],
+      [1, 2, 3],
+      [2, 2, 3],
+      [4, 4, 4],
+    ]
+    expect(pathAt(0, pts)).toEqual(pts[0])
+    expect(pathAt(1 / 3, pts)).toEqual(pts[1])
+    expect(pathAt(2 / 3, pts)).toEqual(pts[2])
+    expect(pathAt(1, pts)).toEqual(pts[3])
+    expect(pathAt(-1, pts)).toEqual(pts[0])
+    expect(pathAt(2, pts)).toEqual(pts[3])
   })
 })

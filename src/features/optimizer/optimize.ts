@@ -33,6 +33,7 @@ import type {
   VehicleDefinition,
 } from '@/types'
 import { type Clock, performanceClock } from '@/utils/clock'
+import { overloadBreaches, supportLoads } from './axles'
 import { fitsThroughDoor, type PlacedBox } from './geometry'
 import { computeSupport } from './support'
 import { planSingleTrip } from './placeTrip'
@@ -191,19 +192,24 @@ export function optimize(
     // stacked on a deferred shop's box during single-trip packing. Simply
     // dropping the supporter would leave the box floating (support ratio 0), so
     // cascade-defer every box that loses support once the deferred shops are gone
-    // — repeated, because removing one box can un-support the box above it. If the
-    // cascade would empty the trip, we abandon the anti-split defer for this trip
-    // instead (plan.placements is internally supported): correctness must never
-    // stall progress by producing an empty trip.
+    // — repeated, because removing one box can un-support the box above it. The
+    // anti-split defer is abandoned outright (plan.placements is internally
+    // supported AND axle-legal by construction) when the cascade would empty
+    // the trip, or when the removals push an axle past its plated max — item
+    // axle contributions can be NEGATIVE (rear overhang), so removing boxes can
+    // RAISE the other axle's load past a limit that held during packing.
     let effectiveDefer = deferShopIds
     const antiSplitKept = plan.placements.filter(
       (p) => !effectiveDefer.has(shopByCargo.get(p.cargoId)!),
     )
     let cascade = deferOrphanedStacks(antiSplitKept, itemById, config)
-    if (cascade.kept.length === 0) {
+    if (cascade.kept.length === 0 || breachesAxleMaxima(cascade.kept, itemById, vehicle)) {
       effectiveDefer = new Set<string>()
       cascade = { kept: plan.placements, orphaned: [] }
     }
+    // Insertion order IS the loading order: placeTrip only commits slots with a
+    // clear loading route past the cargo already inserted, so the sequence is
+    // physically executable by construction (and removals only open space).
     const placements = stamp(cascade.kept, tripId)
 
     const deferredCargo: UnplacedCargo[] = []
@@ -379,6 +385,30 @@ function shopDoor(shop: Shop, vehicle: VehicleDefinition): DoorSide {
 type UntrippedPlacement = Omit<CargoPlacement, 'tripId'>
 
 /**
+ * Whether a kept-placement set exceeds an axle/kingpin plated maximum (planning
+ * estimate; false when the vehicle has no axle data). Used to decide when the
+ * anti-split defer must be abandoned: removing boxes can raise an axle load.
+ */
+function breachesAxleMaxima(
+  placements: UntrippedPlacement[],
+  itemById: Map<string, CargoItem>,
+  vehicle: VehicleDefinition,
+): boolean {
+  if (!vehicle.axles) return false
+  const boxes: PlacedBox[] = placements.map((p) => {
+    const template = getTemplate(itemById.get(p.cargoId)!.templateId)
+    return {
+      cargoId: p.cargoId,
+      templateId: template.id,
+      min: p.position,
+      size: itemDimensions(template, p.rotationY),
+      weightKg: template.weightKg,
+    }
+  })
+  return overloadBreaches(supportLoads(boxes, vehicle.axles), vehicle.axles).length > 0
+}
+
+/**
  * Iteratively remove placements whose base support has dropped below the
  * threshold against the surviving set — used after the anti-split rule strips a
  * deferred shop's boxes out of a trip, which can leave boxes stacked on them
@@ -425,6 +455,7 @@ function stamp(
 ): CargoPlacement[] {
   return placements.map((p, i) => ({ ...p, tripId, loadingOrder: i + 1 }))
 }
+
 
 function tally(ids: string[]): Map<string, number> {
   const m = new Map<string, number>()

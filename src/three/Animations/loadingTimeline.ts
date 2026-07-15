@@ -8,12 +8,19 @@
 // [k × STEP, k × STEP + DUR] seconds at speed 1 — DUR < STEP, so flights never
 // overlap. Total timeline = N × STEP.
 //
-// Path per item: a two-segment dog-leg, no physics.
-//   staging (outside the assigned door) → waypoint (inside the doorway)
-//   → final placement. Each segment is smoothstep-eased; the item snaps to its
-//   exact final transform at the window end so there is no drift.
+// Path per item: the SHARED loading route from the optimizer's reachability
+// planner (features/optimizer/reachability.ts) — the exact corridor the
+// placement heuristic certified when it committed the slot, converted to scene
+// metres. Forklift L-route (cross the door frame low, drive the lane, turn,
+// lift, push in) or crane (rise in the doorway, travel over, drop). Each
+// segment is smoothstep-eased; the item snaps to its exact final transform at
+// the window end so there is no drift.
 
 import type { CargoRenderItem } from '../CargoLayer/cargoModel'
+import {
+  planLoadingRoute,
+  type SolidBox,
+} from '@/features/optimizer/reachability'
 import type { DoorSide, VehicleDefinition } from '@/types'
 import { m } from '../units'
 
@@ -22,16 +29,28 @@ export const LOADING_STEP_S = 0.6
 /** Seconds one item spends in flight (at speed 1). Must stay < STEP. */
 export const LOADING_DUR_S = 0.55
 
-/** How far outside the door plane an item stages, in domain cm. */
-const STAGING_CLEARANCE_CM = 150
-
 export type Vec3Tuple = [number, number, number]
 
-/** The three anchor points of one item's dog-leg flight (scene metres). */
+/** The anchor points of one item's flight (scene metres). */
 export type ItemPath = {
+  /** Outside the door, aligned with the opening. */
   staging: Vec3Tuple
-  waypoint: Vec3Tuple
+  /** Interior waypoints in flight order (door crossing → carry → lift). */
+  waypoints: Vec3Tuple[]
   final: Vec3Tuple
+}
+
+/** A solid box the flight must not pass through (domain cm, min-corner + size). */
+export type Obstacle = SolidBox
+
+/** The obstacle an already-placed render item presents to later flights. */
+export function itemObstacle(item: CargoRenderItem): Obstacle {
+  return { min: item.min, size: item.size }
+}
+
+/** The full ordered point list of a path: staging → waypoints → final. */
+export function pathPoints(path: ItemPath): Vec3Tuple[] {
+  return [path.staging, ...path.waypoints, path.final]
 }
 
 export type LoadingPhase = 'pending' | 'moving' | 'placed'
@@ -57,38 +76,26 @@ export function buildItemPath(
   item: CargoRenderItem,
   vehicle: VehicleDefinition,
   doorSide: DoorSide = item.assignedDoor,
+  /** Already-placed cargo the flight must treat as solid (loading: every item
+   *  placed before this one; delivery: everything still aboard). */
+  obstacles: readonly Obstacle[] = [],
 ): ItemPath {
   const door =
     vehicle.doors.find((d) => d.side === doorSide) ??
     vehicle.doors.find((d) => d.side === 'rear') ??
     vehicle.doors[0]
-  const final = item.center
-  const [w, , d] = item.sceneSize
-  const clearance = m(STAGING_CLEARANCE_CM)
-
-  if (door.side === 'rear') {
-    // Stage behind the rear (z=0) wall at the door's horizontal centre, then
-    // enter the doorway at the item's final x/y and push straight in (+Z).
-    const doorCenterX = m(door.position.x + door.width / 2)
-    return {
-      staging: [doorCenterX, final[1], -clearance],
-      // Centre at d/2 = the box has just fully crossed the door plane. Final z
-      // is always ≥ d/2 (min-corner z ≥ 0), so segment 2 never moves backwards.
-      waypoint: [final[0], final[1], d / 2],
-      final,
-    }
-  }
-
-  // Side door on the x=0 (left) or x=width (right) wall; door width runs along Z.
-  const wallX = door.side === 'left' ? 0 : m(vehicle.cargoSpace.width)
-  const out = door.side === 'left' ? -1 : 1
-  const doorCenterZ = m(door.position.z + door.width / 2)
+  // bestEffort: the animation must always have SOME route — the optimizer
+  // already certified reachability for its own loading order, so the fallback
+  // only ever fires for odd hand-authored data or T15 blocker re-routes.
+  const route = planLoadingRoute(item.size, item.min, door, vehicle, obstacles, true)!
+  const points = route.map(
+    ([x, y, z]): Vec3Tuple => [m(x), m(y), m(z)],
+  )
   return {
-    staging: [wallX + out * clearance, final[1], doorCenterZ],
-    // Just fully inside the wall, at the item's final y/z; segment 2 slides
-    // along ±X to the final x (which is always ≥ w/2 from either wall).
-    waypoint: [wallX - out * (w / 2), final[1], final[2]],
-    final,
+    staging: points[0],
+    waypoints: points.slice(1, -1),
+    // Use the exact render-item centre so the landed mesh never drifts.
+    final: item.center,
   }
 }
 
@@ -117,29 +124,26 @@ function lerp3(a: Vec3Tuple, b: Vec3Tuple, u: number): Vec3Tuple {
 }
 
 /**
- * Position along a two-segment dog-leg `from → via → to` at progress u ∈ [0, 1]
- * (clamped): first half eases from→via, second half via→to, smoothstep each.
- * Shared by the loading flight (T14) and the delivery slide-out/return (T15,
- * which runs it in reverse by swapping the endpoints).
+ * Position along a multi-segment waypoint chain at progress u ∈ [0, 1]
+ * (clamped): the chain is divided into equal-time segments, each smoothstep-
+ * eased. Shared by the loading flight (T14) and the delivery slide-out/return
+ * (T15, which runs a reversed point list).
  */
-export function dogLegAt(
-  u: number,
-  from: Vec3Tuple,
-  via: Vec3Tuple,
-  to: Vec3Tuple,
-): Vec3Tuple {
-  if (u <= 0) return from
-  if (u >= 1) return to
-  return u < 0.5
-    ? lerp3(from, via, smoothstep(u / 0.5))
-    : lerp3(via, to, smoothstep((u - 0.5) / 0.5))
+export function pathAt(u: number, points: readonly Vec3Tuple[]): Vec3Tuple {
+  const segments = points.length - 1
+  if (segments < 1) return points[0]
+  if (u <= 0) return points[0]
+  if (u >= 1) return points[segments]
+  const scaled = u * segments
+  const seg = Math.min(Math.floor(scaled), segments - 1)
+  return lerp3(points[seg], points[seg + 1], smoothstep(scaled - seg))
 }
 
 /**
  * Transform of item `index` at timeline time `t` (seconds, speed already
  * applied by the caller). Before its window: hidden at staging. During: eased
- * along staging→waypoint for the first half, waypoint→final for the second.
- * At/after window end: exactly the final position — snap, no drift.
+ * along the waypoint chain staging → … → final. At/after window end: exactly
+ * the final position — snap, no drift.
  */
 export function transformAt(
   t: number,
@@ -157,6 +161,6 @@ export function transformAt(
   }
 
   const u = (t - start) / LOADING_DUR_S
-  const position = dogLegAt(u, path.staging, path.waypoint, path.final)
+  const position = pathAt(u, pathPoints(path))
   return { visible: true, phase: 'moving', position, flight: u }
 }

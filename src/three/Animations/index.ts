@@ -4,14 +4,22 @@ export { useLoadingTimeline } from './useLoadingTimeline'
 export { useDeliveryTimeline } from './useDeliveryTimeline'
 export {
   buildItemPath,
-  dogLegAt,
   itemIndexAt,
+  itemObstacle,
+  pathAt,
+  pathPoints,
   timelineDuration,
   transformAt,
   LOADING_DUR_S,
   LOADING_STEP_S,
 } from './loadingTimeline'
-export type { ItemPath, LoadingPhase, LoadingTransform, Vec3Tuple } from './loadingTimeline'
+export type {
+  ItemPath,
+  LoadingPhase,
+  LoadingTransform,
+  Obstacle,
+  Vec3Tuple,
+} from './loadingTimeline'
 export {
   blockerStagingSlot,
   buildRoutePlan,

@@ -5,7 +5,13 @@
 import { useMemo } from 'react'
 import type { VehicleDefinition } from '@/types'
 import type { CargoRenderItem } from '../CargoLayer/cargoModel'
-import { buildItemPath, timelineDuration, type ItemPath } from './loadingTimeline'
+import {
+  buildItemPath,
+  itemObstacle,
+  timelineDuration,
+  type ItemPath,
+  type Obstacle,
+} from './loadingTimeline'
 
 export type LoadingTimeline = {
   /** Flight path per item, aligned with `items` (already loadingOrder-sorted). */
@@ -18,11 +24,15 @@ export function useLoadingTimeline(
   items: readonly CargoRenderItem[],
   vehicle: VehicleDefinition,
 ): LoadingTimeline {
-  return useMemo(
-    () => ({
-      paths: items.map((item) => buildItemPath(item, vehicle)),
-      duration: timelineDuration(items.length),
-    }),
-    [items, vehicle],
-  )
+  return useMemo(() => {
+    // Item k flies while items 0..k-1 already sit at their final placements
+    // (flights never overlap: DUR < STEP) — those are its solid obstacles.
+    const placedSoFar: Obstacle[] = []
+    const paths = items.map((item) => {
+      const path = buildItemPath(item, vehicle, item.assignedDoor, placedSoFar)
+      placedSoFar.push(itemObstacle(item))
+      return path
+    })
+    return { paths, duration: timelineDuration(items.length) }
+  }, [items, vehicle])
 }
