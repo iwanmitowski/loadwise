@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoadWise — Pitch</title>
+  <meta name="description" content="LoadWise — cargo-first 3D load planning that's safe, legal and unloadable. Built AI-first for the AI Factor hackathon." />
+  <meta name="theme-color" content="#0a0e17" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%9A%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #0a0e17;
+    --ground-2: #0c1220;
+    --surface: #121a2b;
+    --card: #141d30;
+    --line: #253150;
+    --line-soft: #1a2438;
+    --ink: #eff3fb;
+    --muted: #94a2bd;
+    --faint: #5f6d88;
+    --accent: #f2913b;
+    --accent-ink: #ffb469;
+    --blue: #4f9dde;
+    --green: #58b978;
+    --pink: #d95f8c;
+    --violet: #8f7ee0;
+    --good: #58b978;
+
+    --sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+    --measure: 60ch;
+    --rail: 232px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(120% 80% at 82% -10%, #14213a 0%, rgba(20,33,58,0) 55%),
+      linear-gradient(180deg, var(--ground-2), var(--ground));
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: radial-gradient(130% 100% at 50% 0%, #000 0%, rgba(0,0,0,.35) 55%, transparent 85%);
+            mask-image: radial-gradient(130% 100% at 50% 0%, #000 0%, rgba(0,0,0,.35) 55%, transparent 85%);
+    opacity: .5;
+  }
+
+  .deck { position: relative; z-index: 1; }
+
+  .rail {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--rail);
+    padding: 30px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    border-right: 1px solid var(--line-soft);
+    background: linear-gradient(180deg, rgba(10,14,23,.9), rgba(10,14,23,.4));
+    backdrop-filter: blur(6px);
+    z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark {
+    width: 30px; height: 30px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--accent), #c46a1f);
+    box-shadow: 0 0 0 1px rgba(255,180,105,.35), 0 8px 20px rgba(242,145,59,.25);
+    font-size: 16px;
+  }
+  .brand b { font-size: 17px; letter-spacing: -.01em; }
+  .brand span { display: block; font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: .12em; text-transform: uppercase; }
+
+  .toc { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .toc a {
+    display: grid; grid-template-columns: 26px 1fr; align-items: baseline; gap: 8px;
+    padding: 7px 8px; border-radius: 7px;
+    color: var(--faint); text-decoration: none;
+    font-size: 13px; line-height: 1.25;
+    border: 1px solid transparent;
+    transition: color .2s, background .2s, border-color .2s;
+  }
+  .toc a .n { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; }
+  .toc a:hover { color: var(--muted); background: rgba(255,255,255,.02); }
+  .toc a.active { color: var(--ink); background: rgba(242,145,59,.08); border-color: rgba(242,145,59,.25); }
+  .toc a.active .n { color: var(--accent-ink); }
+  .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .rail .live {
+    margin-top: auto;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+    color: var(--muted); text-decoration: none;
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 11px; border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,.015);
+    transition: border-color .2s, color .2s;
+    word-break: break-all;
+  }
+  .rail .live:hover { border-color: rgba(242,145,59,.5); color: var(--accent-ink); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 3px rgba(88,185,120,.18); flex: none; }
+
+  .navhint { margin: 12px 0 0; font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--faint); display: flex; align-items: center; gap: 5px; max-width: none; }
+  .navhint kbd { font-family: var(--mono); font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; background: rgba(255,255,255,.02); line-height: 1.4; }
+
+  .progress { position: fixed; top: 0; left: var(--rail); right: 0; height: 2px; background: transparent; z-index: 30; }
+  .progress > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-ink)); box-shadow: 0 0 12px rgba(242,145,59,.6); }
+
+  .scroll {
+    margin-left: var(--rail);
+    height: 100vh; height: 100svh;
+    overflow-y: auto;
+    scroll-snap-type: y proximity;
+    scroll-behavior: smooth;
+  }
+  section {
+    min-height: 100vh; min-height: 100svh;
+    scroll-snap-align: start;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 88px clamp(28px, 6vw, 104px);
+    position: relative;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .wrap { width: 100%; max-width: 1080px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--accent-ink);
+    display: inline-flex; align-items: center; gap: 12px; margin: 0 0 22px;
+  }
+  .eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--accent); opacity: .8; }
+
+  h1 { font-size: clamp(44px, 7.4vw, 104px); line-height: .96; letter-spacing: -.035em; font-weight: 800; margin: 0; text-wrap: balance; }
+  h2 { font-size: clamp(30px, 4.6vw, 56px); line-height: 1.03; letter-spacing: -.025em; font-weight: 800; margin: 0 0 22px; text-wrap: balance; max-width: 20ch; }
+  h3 { font-size: 20px; letter-spacing: -.01em; margin: 0 0 8px; font-weight: 700; }
+
+  p.lead { font-size: clamp(18px, 2vw, 22px); color: var(--muted); max-width: var(--measure); margin: 0 0 16px; text-wrap: pretty; }
+  p { color: var(--muted); max-width: var(--measure); }
+  .accent { color: var(--accent-ink); }
+  strong { color: var(--ink); font-weight: 650; }
+  code { font-family: var(--mono); font-size: .9em; color: var(--accent-ink); }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: .08s; }
+  .reveal.d2 { transition-delay: .16s; }
+  .reveal.d3 { transition-delay: .24s; }
+  .reveal.d4 { transition-delay: .32s; }
+
+  .hero .wrap { max-width: 1180px; display: grid; grid-template-columns: 1.05fr .95fr; gap: 40px; align-items: center; }
+  .hero h1 .wm { display: block; background: linear-gradient(92deg, #ffffff 30%, var(--accent-ink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .thesis { margin: 24px 0 30px; font-size: clamp(18px, 2.1vw, 23px); color: var(--muted); max-width: 30ch; }
+  .hero .thesis b { color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font-family: var(--mono); font-size: 12px; letter-spacing: .04em; color: var(--muted); padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.015); }
+  .chip.live { color: var(--ink); border-color: rgba(242,145,59,.4); }
+  .canvas-frame { position: relative; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, #0d1424, #0a0f1b); overflow: hidden; box-shadow: 0 30px 80px -30px rgba(0,0,0,.8); }
+  .canvas-frame::after { content: "LOADING · TRIP 1 / 2"; position: absolute; top: 12px; left: 14px; font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: var(--faint); }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+
+  .card { border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: linear-gradient(180deg, var(--card), rgba(20,29,48,.4)); }
+  .card .ic { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 12px; }
+  .card p { font-size: 15px; margin: 0; }
+
+  .pillar { position: relative; overflow: hidden; transition: border-color .3s, background .3s; }
+  .pillar::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); opacity: 0; transition: opacity .3s; }
+  .pillar:hover::before { opacity: .9; }
+  .pillar:hover { background: linear-gradient(180deg, #17223a, rgba(20,29,48,.5)); }
+  .pillar .k { font-family: var(--mono); font-size: 34px; font-weight: 500; color: var(--accent); line-height: 1; margin-bottom: 16px; letter-spacing: -.02em; }
+
+  .pains { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .pain { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; color: var(--muted); background: rgba(217,95,140,.04); }
+  .pain b { color: var(--ink); font-weight: 600; }
+  .pain i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 14px; overflow: hidden; }
+  .stat { background: var(--ground-2); padding: 26px 22px; }
+  .stat .v { font-family: var(--mono); font-size: clamp(30px, 3.6vw, 46px); font-weight: 600; letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .step { border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--ground-2); position: relative; }
+  .step .n { font-family: var(--mono); color: var(--accent-ink); font-size: 12px; letter-spacing: .1em; }
+  .step h3 { font-size: 17px; margin-top: 8px; }
+  .step p { font-size: 14px; margin: 0; }
+  .step::after { content: "→"; position: absolute; right: -11px; top: 50%; transform: translateY(-50%); color: var(--faint); z-index: 2; }
+  .step:last-child::after { display: none; }
+
+  .report { display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: linear-gradient(180deg, var(--card), rgba(20,29,48,.35)); }
+  .score { width: 128px; height: 128px; border-radius: 18px; display: grid; place-content: center; text-align: center; border: 1px solid rgba(88,185,120,.4); background: rgba(88,185,120,.08); }
+  .score b { font-family: var(--mono); font-size: 46px; font-weight: 600; color: #8fe0ab; line-height: 1; }
+  .score span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .bars { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 26px; }
+  .bar .bt { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 6px; font-family: var(--mono); }
+  .bar .bt b { color: var(--ink); }
+  .bar .track { height: 7px; border-radius: 99px; background: #0c1424; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--blue), #79b8ee); width: 0; transition: width 1s cubic-bezier(.2,.7,.2,1); }
+
+  .honest { margin-top: 26px; border: 1px solid rgba(242,145,59,.3); background: rgba(242,145,59,.06); border-radius: 12px; padding: 18px 20px; max-width: 62ch; }
+  .honest p { color: var(--ink); max-width: none; margin: 0; font-size: 16px; }
+  .honest .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink); display: block; margin-bottom: 8px; }
+
+  .close .wrap { max-width: 1000px; }
+  .cta { display: inline-flex; align-items: center; gap: 12px; margin-top: 30px; padding: 16px 24px; border-radius: 12px; text-decoration: none; font-family: var(--mono); font-size: 16px; letter-spacing: .02em; color: #0a0e17; font-weight: 600; background: linear-gradient(150deg, var(--accent-ink), var(--accent)); box-shadow: 0 16px 40px -12px rgba(242,145,59,.55); transition: transform .2s, box-shadow .2s; }
+  .cta:hover { transform: translateY(-2px); box-shadow: 0 22px 50px -12px rgba(242,145,59,.7); }
+  .cta:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+  .roadmap { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+  .roadmap .chip { border-style: dashed; }
+  .kicker { font-family: var(--mono); color: var(--faint); font-size: 13px; margin-top: 34px; letter-spacing: .04em; }
+
+  @media (max-width: 1080px) {
+    .hero .wrap { grid-template-columns: 1fr; }
+    .canvas-frame { order: -1; }
+    .cols-3, .flow, .stats { grid-template-columns: 1fr 1fr; }
+    .report { grid-template-columns: 1fr; }
+    .bars { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    :root { --rail: 0px; }
+    .rail { position: static; width: auto; flex-direction: row; align-items: center; gap: 14px; overflow-x: auto; padding: 14px 16px; }
+    .toc, .brand span { display: none; }
+    .rail .live { margin: 0 0 0 auto; font-size: 10px; }
+    .progress { left: 0; }
+    .scroll { height: auto; overflow: visible; scroll-snap-type: none; }
+    section { min-height: auto; padding: 64px 22px; scroll-snap-align: none; }
+    .cols-2, .cols-3, .flow, .stats { grid-template-columns: 1fr; }
+    .step::after { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html, .scroll { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+</head>
+<body>
+  <div class="deck">
+    <nav class="rail" aria-label="Sections">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">🚚</span>
+        <div>
+          <b>LoadWise</b>
+          <span>AI Factor · 2026</span>
+        </div>
+      </div>
+      <div class="toc" id="toc">
+        <a href="#s1"><span class="n">01</span><span>The pitch</span></a>
+        <a href="#s2"><span class="n">02</span><span>The problem</span></a>
+        <a href="#s3"><span class="n">03</span><span>Who feels it</span></a>
+        <a href="#s4"><span class="n">04</span><span>What it does</span></a>
+        <a href="#s5"><span class="n">05</span><span>Why it wins</span></a>
+        <a href="#s6"><span class="n">06</span><span>Under the hood</span></a>
+        <a href="#s7"><span class="n">07</span><span>Built AI-first</span></a>
+        <a href="#s8"><span class="n">08</span><span>It's live</span></a>
+      </div>
+      <a class="live" href="https://loadwise-chi.vercel.app/" target="_blank" rel="noopener">
+        <span class="dot" aria-hidden="true"></span>loadwise-chi.vercel.app
+      </a>
+      <p class="navhint" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> or <kbd>Space</kbd> to navigate</p>
+    </nav>
+    <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+
+    <main class="scroll" id="scroll">
+      <section id="s1" class="hero">
+        <div class="wrap">
+          <div>
+            <p class="eyebrow">Cargo load planning · built AI-first</p>
+            <h1><span class="wm">LoadWise</span></h1>
+            <p class="thesis">The densest way to pack a truck is usually the <b>worst</b> way to drive and unload it. LoadWise plans loads that are <b>safe, legal, and actually unloadable</b> — in interactive 3D.</p>
+            <div class="chips">
+              <span class="chip live">▶ live in the browser</span>
+              <span class="chip">deterministic</span>
+              <span class="chip">no backend · no API keys</span>
+            </div>
+          </div>
+          <div class="canvas-frame" style="aspect-ratio: 4 / 3;">
+            <canvas id="loader" width="640" height="480" aria-label="Animation of cargo loading into a truck"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="s2">
+        <div class="wrap">
+          <p class="eyebrow reveal">The problem</p>
+          <h2 class="reveal d1">Anyone can check if it fits. The hard part is everything after.</h2>
+          <p class="lead reveal d2">Warehouse and transport teams plan loads for <strong>fit</strong>. Then reality hits the road: the first delivery is buried behind the last, an axle is over its legal limit, the load is rear-heavy at 90&nbsp;km/h.</p>
+          <p class="reveal d3">A plan that fills every cubic centimetre but costs a re-handle at every stop — and can't pass a roadside inspection — isn't a good plan. It's an expensive one.</p>
+          <div class="pains reveal d4">
+            <span class="pain"><i style="background:var(--pink)"></i><b>Buried deliveries</b>&nbsp;— unpack half the truck to reach stop&nbsp;1</span>
+            <span class="pain"><i style="background:var(--accent)"></i><b>Illegal axle loads</b>&nbsp;— under gross weight, still over an axle</span>
+            <span class="pain"><i style="background:var(--blue)"></i><b>Unsafe under braking</b>&nbsp;— nothing blocking the load forward</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="s3">
+        <div class="wrap">
+          <p class="eyebrow reveal">Who feels it</p>
+          <h2 class="reveal d1">Stuck between a spreadsheet and a six-figure suite.</h2>
+          <p class="lead reveal d2">Small and mid-sized distributors and 3PLs running repeat multi-stop routes — vans, box trucks, curtain-siders. Too complex for hand-drawn sketches, too small for a heavyweight enterprise TMS.</p>
+          <div class="cols-3" style="margin-top:26px">
+            <div class="card reveal d2"><div class="ic">Today</div><h3>Manual &amp; error-prone</h3><p>Spreadsheets and gut feel. Bad master data, missed axle checks, surprises at the dock.</p></div>
+            <div class="card reveal d3"><div class="ic">The gap</div><h3>Nothing in the middle</h3><p>Toy packers ignore delivery order and safety; enterprise suites are slow to buy, deploy and learn.</p></div>
+            <div class="card reveal d4"><div class="ic">The want</div><h3>Safe plans, in minutes</h3><p>Right vehicle, right trips, a plan the warehouse can build and the driver can defend.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s4">
+        <div class="wrap">
+          <p class="eyebrow reveal">The product · one flow</p>
+          <h2 class="reveal d1">From a list of boxes to a drivable plan.</h2>
+          <div class="flow" style="margin:26px 0 30px">
+            <div class="step reveal d1"><div class="n">STEP 01</div><h3>Set the scene</h3><p>Pick a vehicle &amp; doors, generate 3–8 shops of realistic cargo — from a seed.</p></div>
+            <div class="step reveal d2"><div class="n">STEP 02</div><h3>Auto-plan</h3><p>The optimizer places every box and spills into extra trips automatically.</p></div>
+            <div class="step reveal d3"><div class="n">STEP 03</div><h3>Watch it load</h3><p>3D loading replay + stop-by-stop delivery simulation, through the real doors.</p></div>
+            <div class="step reveal d4"><div class="n">STEP 04</div><h3>Read the report</h3><p>Deterministic score, balance, blocked cargo and warnings — in plain language.</p></div>
+          </div>
+          <div class="report reveal d3" aria-label="Sample optimization report">
+            <div class="score"><b>76</b><span>/ 100</span></div>
+            <div>
+              <div style="font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase;margin-bottom:14px">Box truck · 2 trips · 24 / 27 units · seed demo-1</div>
+              <div class="bars">
+                <div class="bar"><div class="bt"><span>Weight utilization</span><b>78%</b></div><div class="track"><div class="fill" data-w="78"></div></div></div>
+                <div class="bar"><div class="bt"><span>Left / right balance</span><b>99%</b></div><div class="track"><div class="fill" data-w="99" style="background:linear-gradient(90deg,var(--green),#8fe0ab)"></div></div></div>
+                <div class="bar"><div class="bt"><span>Load stability (axle/CoG)</span><b>69%</b></div><div class="track"><div class="fill" data-w="69" style="background:linear-gradient(90deg,var(--accent),var(--accent-ink))"></div></div></div>
+                <div class="bar"><div class="bt"><span>Volume utilization</span><b>37%</b></div><div class="track"><div class="fill" data-w="37" style="background:linear-gradient(90deg,var(--violet),#b3a6f0)"></div></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s5">
+        <div class="wrap">
+          <p class="eyebrow reveal">Why it wins</p>
+          <h2 class="reveal d1">Three things most packers get wrong.</h2>
+          <div class="cols-3" style="margin-top:26px">
+            <div class="card pillar reveal d1">
+              <div class="k">01</div>
+              <h3>Delivery-order aware</h3>
+              <p>Cargo loads back-to-front so <strong>stop 1 comes out first</strong>. No unpacking the truck at every drop — and it counts the extra moves when a layout forces them.</p>
+            </div>
+            <div class="card pillar reveal d2">
+              <div class="k">02</div>
+              <h3>Door aware</h3>
+              <p>Every box routes through a <strong>real door</strong> — rear or side — never through a wall. Slots that can't be reached past loaded cargo are rejected up front.</p>
+            </div>
+            <div class="card pillar reveal d3">
+              <div class="k">03</div>
+              <h3>Physically honest</h3>
+              <p>Axle &amp; centre-of-gravity limits, steering-axle load, securing forces (EN&nbsp;12195-1), re-checked <strong>after every stop</strong>. Labeled planning estimates — never fake certainty.</p>
+            </div>
+          </div>
+          <p class="reveal d4" style="margin-top:24px;max-width:64ch">Delivery-order-aware packing and door-aware unloading are exactly the features the market says are missing — and the hardest to fake.</p>
+        </div>
+      </section>
+
+      <section id="s6">
+        <div class="wrap">
+          <p class="eyebrow reveal">Under the hood</p>
+          <h2 class="reveal d1">A deterministic engine you can trust and reproduce.</h2>
+          <div class="cols-2 reveal d2" style="margin:6px 0 30px">
+            <p style="max-width:none">A greedy best-fit heuristic scores extreme-point candidates on compactness, axle balance, door access, delivery order and support — validating overlap, stacking and payload on <strong>every</strong> placement, committing only reachable slots.</p>
+            <p style="max-width:none">It runs in a <strong>Web Worker</strong> with progress and cancel, off the main thread. A seeded RNG makes it fully reproducible: <strong>same seed → identical plan</strong>, every run. No <code>Math.random</code> in the domain. Export any scenario as JSON.</p>
+          </div>
+          <div class="stats reveal d3" id="stats">
+            <div class="stat"><div class="v" data-to="356">0</div><div class="l">unit tests, all green</div></div>
+            <div class="stat"><div class="v" data-to="100">0</div><div class="l">boxes planned in <span class="accent">~0.3s</span></div></div>
+            <div class="stat"><div class="v" data-to="120">0</div><div class="l">seed × vehicle invariants</div></div>
+            <div class="stat"><div class="v" data-to="0">0</div><div class="l">API keys &amp; servers</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="s7" class="agentic">
+        <div class="wrap">
+          <p class="eyebrow reveal">Built AI-first</p>
+          <h2 class="reveal d1">22 tasks. One prompt each. Shipped in 48&nbsp;hours.</h2>
+          <p class="lead reveal d2">Every feature — the optimizer, the physics, the 3D scene, the UI — was implemented by <strong>AI coding agents</strong> (Claude&nbsp;Code), three of us driving them in parallel across separate tracks. One self-contained prompt per task, merged on green.</p>
+          <div class="stats reveal d3" style="grid-template-columns:repeat(3,1fr);margin-top:8px">
+            <div class="stat"><div class="v" data-to="22">0</div><div class="l">tasks, agent-implemented</div></div>
+            <div class="stat"><div class="v" data-to="48">0</div><div class="l">hours, three developers</div></div>
+            <div class="stat"><div class="v" data-to="3">0</div><div class="l">parallel tracks</div></div>
+          </div>
+          <div class="honest reveal d4">
+            <span class="tag">The honest twist</span>
+            <p>The AI is in <strong>how we built it</strong>. The product itself is deterministic math — <strong>no LLM in the loop</strong>, by design. In logistics, a plan you can reproduce and defend beats a plan you have to trust.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="s8" class="close">
+        <div class="wrap">
+          <p class="eyebrow reveal">See it live</p>
+          <h2 class="reveal d1">It's not a demo. It's deployed.</h2>
+          <p class="lead reveal d2">Cargo-first, delivery-aware, physically honest load planning — in the browser, deterministic, no backend. Click <strong>Load demo</strong> and it runs the exact scenario you're about to see.</p>
+          <a class="cta reveal d3" href="https://loadwise-chi.vercel.app/" target="_blank" rel="noopener">▶ loadwise-chi.vercel.app</a>
+          <div class="roadmap reveal d4">
+            <span class="chip">Next: Loader Mode</span>
+            <span class="chip">Manufacturer axle charts</span>
+            <span class="chip">Lock &amp; re-optimize</span>
+          </div>
+          <p class="kicker reveal d4">Now — let's load a truck.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    var scroller = document.getElementById("scroll");
+    var bar = document.getElementById("bar");
+    var links = Array.prototype.slice.call(document.querySelectorAll("#toc a"));
+    var sections = links.map(function (a) { return document.querySelector(a.getAttribute("href")); });
+
+    function onScroll() {
+      var st = scroller.scrollTop;
+      var max = scroller.scrollHeight - scroller.clientHeight;
+      bar.style.width = (max > 0 ? (st / max) * 100 : 0) + "%";
+      var mid = st + scroller.clientHeight * 0.4;
+      var idx = 0;
+      for (var i = 0; i < sections.length; i++) { if (sections[i] && sections[i].offsetTop <= mid) idx = i; }
+      links.forEach(function (l, i) { l.classList.toggle("active", i === idx); });
+    }
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+
+    function currentIndex() {
+      var mid = scroller.scrollTop + scroller.clientHeight * 0.4;
+      var idx = 0;
+      for (var i = 0; i < sections.length; i++) { if (sections[i] && sections[i].offsetTop <= mid) idx = i; }
+      return idx;
+    }
+    function goTo(i) {
+      i = Math.max(0, Math.min(sections.length - 1, i));
+      if (sections[i]) scroller.scrollTo({ top: sections[i].offsetTop, behavior: reduce ? "auto" : "smooth" });
+    }
+    links.forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        var t = document.querySelector(a.getAttribute("href"));
+        if (t) { e.preventDefault(); scroller.scrollTo({ top: t.offsetTop, behavior: reduce ? "auto" : "smooth" }); }
+      });
+    });
+
+    // Keyboard: arrows / space / page / home / end drive the deck like slides.
+    window.addEventListener("keydown", function (e) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var k = e.key;
+      var ae = document.activeElement;
+      var onControl = ae && (ae.tagName === "A" || ae.tagName === "BUTTON");
+      var next = k === "ArrowDown" || k === "ArrowRight" || k === "PageDown" ||
+                 ((k === " " || k === "Spacebar") && !onControl && !e.shiftKey);
+      var prev = k === "ArrowUp" || k === "ArrowLeft" || k === "PageUp" ||
+                 ((k === " " || k === "Spacebar") && !onControl && e.shiftKey);
+      if (next) { e.preventDefault(); goTo(currentIndex() + 1); }
+      else if (prev) { e.preventDefault(); goTo(currentIndex() - 1); }
+      else if (k === "Home") { e.preventDefault(); goTo(0); }
+      else if (k === "End") { e.preventDefault(); goTo(sections.length - 1); }
+    });
+
+    onScroll();
+
+    function countUp(el) {
+      var to = parseFloat(el.getAttribute("data-to"));
+      if (reduce || !to) { el.childNodes[0].nodeValue = String(to); return; }
+      var start = performance.now(), dur = 1100;
+      function tick(now) {
+        var p = Math.min(1, (now - start) / dur);
+        var e = 1 - Math.pow(1 - p, 3);
+        el.childNodes[0].nodeValue = String(Math.round(to * e));
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        var t = en.target;
+        if (t.classList.contains("reveal")) t.classList.add("in");
+        if (t.classList.contains("stats")) t.querySelectorAll(".v").forEach(countUp);
+        if (t.classList.contains("report")) t.querySelectorAll(".fill").forEach(function (f) { f.style.width = f.getAttribute("data-w") + "%"; });
+        io.unobserve(t);
+      });
+    }, { root: scroller, threshold: 0.35 });
+
+    document.querySelectorAll(".reveal, .stats, .report").forEach(function (el) { io.observe(el); });
+
+    var cv = document.getElementById("loader");
+    if (cv && cv.getContext) {
+      var ctx = cv.getContext("2d");
+      var W = cv.width, H = cv.height;
+      var shop = ["#4f9dde", "#e8843a", "#58b978", "#d95f8c", "#8f7ee0", "#d9b13b"];
+      var bay = { x: 70, y: 150, w: 430, h: 250 };
+      var boxes = [];
+      function plan() {
+        boxes = [];
+        var cols = [430, 350, 270, 190, 110, 40];
+        var seed = 3, order = 0;
+        for (var c = 0; c < cols.length; c++) {
+          var colX = bay.x + cols[c];
+          seed = (seed * 9301 + 49297) % 233280;
+          var n = Math.min(1 + (seed % 3), 3);
+          var bw = 60, bh = bay.h / 3 - 6;
+          for (var s = 0; s < n; s++) {
+            boxes.push({ tx: colX, ty: bay.y + bay.h - (s + 1) * (bh + 4), w: bw, h: bh, color: shop[(c + s) % shop.length], t0: order * 0.06 });
+            order++;
+          }
+        }
+        return order;
+      }
+      var total = plan();
+      var start = performance.now();
+      var CYCLE = total * 0.06 + 2.6;
+
+      function rr(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function frame(now) {
+        var tt = ((now - start) / 1000) % CYCLE;
+        ctx.clearRect(0, 0, W, H);
+
+        ctx.strokeStyle = "rgba(38,49,72,.55)";
+        ctx.lineWidth = 1;
+        for (var gx = 0; gx <= W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+        for (var gy = 0; gy <= H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+        ctx.strokeStyle = "rgba(148,162,189,.85)";
+        ctx.lineWidth = 2;
+        rr(bay.x, bay.y, bay.w, bay.h, 8); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(bay.x + bay.w, bay.y + 40);
+        ctx.lineTo(bay.x + bay.w + 66, bay.y + 40);
+        ctx.lineTo(bay.x + bay.w + 66, bay.y + bay.h);
+        ctx.lineTo(bay.x + bay.w, bay.y + bay.h);
+        ctx.stroke();
+        ctx.fillStyle = "rgba(148,162,189,.5)";
+        [bay.x + 70, bay.x + bay.w - 40, bay.x + bay.w + 40].forEach(function (wx) {
+          ctx.beginPath(); ctx.arc(wx, bay.y + bay.h + 12, 12, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.strokeStyle = "rgba(242,145,59,.6)";
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(bay.x, bay.y); ctx.lineTo(bay.x, bay.y + bay.h); ctx.stroke();
+        ctx.setLineDash([]);
+
+        var done = 0;
+        boxes.forEach(function (b) {
+          var lt = reduce ? 1 : Math.max(0, Math.min(1, (tt - b.t0) / 0.7));
+          if (lt <= 0) return;
+          if (lt >= 1) done++;
+          var e = 1 - Math.pow(1 - lt, 3);
+          var fromX = bay.x - 90;
+          var x = fromX + (b.tx - fromX) * e;
+          ctx.globalAlpha = 0.35 + 0.65 * lt;
+          rr(x, b.ty, b.w, b.h, 4);
+          ctx.fillStyle = b.color; ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = "rgba(10,14,23,.85)"; ctx.lineWidth = 1.5; ctx.stroke();
+          if (lt < 1) { ctx.globalAlpha = 0.5 * (1 - lt); ctx.strokeStyle = "#fff"; ctx.stroke(); ctx.globalAlpha = 1; }
+        });
+
+        ctx.fillStyle = "rgba(148,162,189,.8)";
+        ctx.font = "11px ui-monospace, monospace";
+        ctx.fillText("loaded " + done + " / " + boxes.length + " · rear -> cabin", bay.x, bay.y + bay.h + 42);
+
+        if (!reduce) requestAnimationFrame(frame);
+      }
+      if (reduce) { var n0 = performance.now(); start = n0 - CYCLE * 1000; frame(n0); }
+      else requestAnimationFrame(frame);
+    }
+  })();
+</script>
+</body>
+</html>
