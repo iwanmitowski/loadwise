@@ -2,6 +2,10 @@
 
 **Plan how cargo loads into a delivery vehicle, and watch every trip in interactive 3D.**
 
+> 🤖 Built **agentic-first**: every task in this 48-hour hackathon was implemented
+> by AI coding agents (Claude Code), driven by the team in parallel — one prompt
+> per task. (The *app itself* runs no LLM; see below.)
+
 LoadWise is a frontend-only web app. A deterministic heuristic optimizer decides
 how boxes pack into a van, box truck or semi-trailer across one or more trips —
 respecting weight, stacking, door access, delivery order and axle limits — then
@@ -129,6 +133,11 @@ Tailwind CSS v4 · Vitest + Playwright · deployed on Vercel.
 Built as a 48-hour hackathon MVP by Ivan Mitovski, Daniel Dimitrov and
 Slavey Dikovski — three developers working in parallel across the domain/optimizer,
 3D/animation and UI/state tracks (see [docs/TASKS.md](docs/TASKS.md)).
+
+This was an **agentic-first hackathon**: every task was implemented by AI coding
+agents (Claude Code) driven by the team in parallel, one self-contained prompt
+per task. See [CLAUDE.md](CLAUDE.md) for the agent workflow and
+[docs/prompts/](docs/prompts/) for the per-task prompts.
 
 ## Docs
 
