@@ -1,5 +1,15 @@
 # Worklog — Daniel Dimitrov
 
+## [2026-07-15 22:05] T23 — Side-door unload blockers respect the door opening
+- Dev: daniel-dimitrov · Model: Opus 4.8 · Branch: feat/T23-side-door-unload-blockers
+- Symptom (user report, demo-1 seed): report said "2 item(s) require moving other cargo when unloading" but the 3D view made the move look unnecessary.
+- Root cause (systematic-debugging, confirmed by probing the real `planLoadingRoute` and reproducing the exact metric numbers): `findBlockers` modelled a **side-door** exit as a straight sideways slide along the whole wall, ignoring the door's opening span (`position.z … +width`). The two flagged items were Fresh Foods `shop-6-c1`/`shop-6-c2` (z≈480–540) sitting **behind** the box-truck left door opening (z 210–410); the naive slide crossed the later-delivered Nova Electronics (`shop-2`) cargo to their left. Real exit drives them along the corridor to the opening and out — nowhere near shop-2. The same bug made the delivery animation slide blockers "out the door" through solid wall.
+- Fix: side-door branch of `findBlockers` is now door-opening-aware via an L-corridor model — a longitudinal leg (drive along Z in the item's own x-lane to the opening's z-band) plus a lateral leg (slide to the wall at a z within the opening); a box blocks iff it intrudes on either. Rear-door logic untouched. **No signature change** — the `VehicleDoor` arg already carries the opening span, so `metrics.ts` and `deliveryTimeline.ts` needed no edits.
+- Files: src/features/optimizer/accessibility.ts, src/features/optimizer/accessibility.test.ts, docs/TASKS.md, docs/prompts/T23-side-door-unload-blockers.md
+- Verification: demo-1 trip-1 `blockedCargoCount 2→0`, `extraUnloadingMoves 3→0`, `blocked-cargo` warning removed, overallScore 76→78 — confirmed end-to-end through the real app + optimizer worker (injected config, seed demo-1, box-truck, left door, 6 shops) via the `verify` skill. Rear-door blocking fixtures unchanged (`metrics.test.ts` 1 blocked / 2 moves; `deliveryTimeline.test.ts` blocker shop-2-c1, extraMoves 1). typecheck / lint / 369 tests / build green.
+- Decisions/deviations: deliberately kept this a **simple geometric approximation** (idea.md §Door-aware loading) rather than reusing `planLoadingRoute` for unloading — the route planner's single fixed turn-lane and crane fallback give wrong unload verdicts (a probe showed it would crane items over cargo, and its preX lane falsely flagged shop-2-c4). Updated the side-door cases in `accessibility.test.ts` to the corrected contract (they previously encoded the naive whole-wall slide).
+- Follow-ups: multi-lane / swept-lane unload routing; make the blocker MOVE-OUT animation path itself route through the opening (delivered-item path already does via T21 reachability); revisit the anti-split planner now that fewer trips flag as blocked.
+
 ## [2026-07-15 21:45] Bugfix — balance point ignores delivered cargo
 - Dev: daniel-dimitrov · Model: Opus 4.8 · Branch: (bugfix, off main)
 - Symptom (user report): during the delivery simulation the centre-of-mass marker never moves as packages are delivered — it should track the current state of the load.

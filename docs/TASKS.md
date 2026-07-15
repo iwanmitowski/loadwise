@@ -28,6 +28,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T20 | Polish, README, final deploy, demo script | all (lead B) | ivan-mitovski | T18 | [T20](prompts/T20-polish-and-ship.md) | done |
 | T21 | Axle-load physics + door-true animation paths | A+B | ivan-mitovski | T07, T14 | [T21](prompts/T21-axle-physics.md) | done |
 | T22 | Score recalibration (research-doc aligned) | A+C | ivan-mitovski | T08, T21 | [T22](prompts/T22-score-recalibration.md) | done |
+| T23 | Side-door unload blockers respect the door opening | A | daniel-dimitrov | T08, T15, T21 | [T23](prompts/T23-side-door-unload-blockers.md) | done |
 
 ## Dependency shape
 
