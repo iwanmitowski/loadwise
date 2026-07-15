@@ -4,8 +4,9 @@ export { useLoadingTimeline } from './useLoadingTimeline'
 export { useDeliveryTimeline } from './useDeliveryTimeline'
 export {
   buildItemPath,
-  dogLegAt,
   itemIndexAt,
+  pathAt,
+  pathPoints,
   timelineDuration,
   transformAt,
   LOADING_DUR_S,

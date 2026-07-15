@@ -15,7 +15,7 @@ import type { DeliveryTrip, DoorSide, Scenario } from '@/types'
 import { useUiStore } from '@/state/uiStore'
 import type { CargoRenderItem } from '../CargoLayer/cargoModel'
 import { stopStateAt, type StopPlan, type StopState } from './deliveryTimeline'
-import { dogLegAt, type ItemPath, type Vec3Tuple } from './loadingTimeline'
+import { pathAt, pathPoints, type ItemPath, type Vec3Tuple } from './loadingTimeline'
 import { deliveryClock, resetDeliveryClock } from './playbackClock'
 import { clearPulse, setPulse } from './pulse'
 import { useDeliveryTimeline } from './useDeliveryTimeline'
@@ -164,22 +164,26 @@ function applyItemState(
     }
     const u = state.opProgress
     mesh.visible = true
+    // Unload runs the loading waypoint chain in REVERSE (lower off the stack,
+    // carry low, exit through the door frame) — same no-wall-clipping guarantee.
+    const outbound = [...pathPoints(path)].reverse()
     if (activeOp.type === 'deliver') {
-      // Slide out reversed (final → doorway → outside) and shrink away over
-      // the second half so the box reads as "handed off".
-      mesh.position.set(...dogLegAt(u, path.final, path.waypoint, path.staging))
+      // Slide out reversed (final → … → outside) and shrink away over the
+      // second half so the box reads as "handed off".
+      mesh.position.set(...pathAt(u, outbound))
       const shrink = u < 0.5 ? 1 : 1 - (1 - DELIVERED_END_SCALE) * ((u - 0.5) / 0.5)
       mesh.scale.setScalar(shrink)
       setPulse(mesh, item.color, PULSE_PEAK * Math.sin(u * Math.PI))
     } else if (activeOp.type === 'move-blocker-out') {
+      // Same exit chain, but the endpoint is the blocker's kerbside slot.
       const slot = slots?.get(item.cargoId) ?? path.staging
-      mesh.position.set(...dogLegAt(u, path.final, path.waypoint, slot))
+      mesh.position.set(...pathAt(u, [...outbound.slice(0, -1), slot]))
       mesh.scale.setScalar(1)
       setPulse(mesh, BLOCKER_COLOR, PULSE_PEAK * Math.sin(u * Math.PI))
     } else {
-      // return-blocker
+      // return-blocker: kerbside slot back in through the door to its place.
       const slot = slots?.get(item.cargoId) ?? path.staging
-      mesh.position.set(...dogLegAt(u, slot, path.waypoint, path.final))
+      mesh.position.set(...pathAt(u, [slot, ...pathPoints(path).slice(1)]))
       mesh.scale.setScalar(1)
       setPulse(mesh, BLOCKER_COLOR, PULSE_PEAK * Math.sin(u * Math.PI))
     }

@@ -9,11 +9,16 @@ import { buildCargoRenderItems } from '../CargoLayer/cargoModel'
 import {
   buildItemPath,
   itemIndexAt,
+  pathAt,
+  pathPoints,
   timelineDuration,
   transformAt,
   LOADING_DUR_S,
   LOADING_STEP_S,
 } from './loadingTimeline'
+import { m } from '../units'
+import type { Vec3Tuple } from './loadingTimeline'
+import type { VehicleDefinition, VehicleDoor } from '@/types'
 
 const rearItems = buildCargoRenderItems(demoResult.trips[0], demoScenario)
 const sideItems = buildCargoRenderItems(
@@ -21,34 +26,75 @@ const sideItems = buildCargoRenderItems(
   demoSideDoorScenario,
 )
 
+/**
+ * THE wall-clipping invariant: sample the whole flight densely and find where
+ * it crosses the door's wall plane; at that instant every point of the box must
+ * be inside the door frame (not the wall). Fails on the old path for stacked
+ * or off-door-axis items.
+ */
+function assertCrossesInsideDoorFrame(
+  points: Vec3Tuple[],
+  size: [number, number, number],
+  door: VehicleDoor,
+  vehicle: VehicleDefinition,
+) {
+  const [w, h, d] = size
+  for (let i = 0; i <= 2000; i++) {
+    const cur = pathAt(i / 2000, points)
+    if (door.side === 'rear') {
+      // Crossing while any part of the box straddles the z=0 plane.
+      const crossed = cur[2] - d / 2 < 0 && cur[2] + d / 2 > 0
+      if (crossed) {
+        expect(cur[0] - w / 2).toBeGreaterThanOrEqual(m(door.position.x))
+        expect(cur[0] + w / 2).toBeLessThanOrEqual(m(door.position.x + door.width))
+        expect(cur[1] + h / 2).toBeLessThanOrEqual(m(door.position.y + door.height))
+      }
+    } else {
+      const wallX = door.side === 'left' ? 0 : m(vehicle.cargoSpace.width)
+      const crossed = cur[0] - w / 2 < wallX && cur[0] + w / 2 > wallX
+      if (crossed) {
+        expect(cur[2] - d / 2).toBeGreaterThanOrEqual(m(door.position.z))
+        expect(cur[2] + d / 2).toBeLessThanOrEqual(m(door.position.z + door.width))
+        expect(cur[1] + h / 2).toBeLessThanOrEqual(m(door.position.y + door.height))
+      }
+    }
+  }
+}
+
 describe('buildItemPath — rear door', () => {
-  // Box-truck rear door: width 220 centred on a 240-wide wall → centre x = 120cm.
   const path = buildItemPath(rearItems[0], demoScenario.vehicle)
 
-  it('stages outside the rear (z=0) wall at the door centre and final height', () => {
-    expect(path.staging[0]).toBeCloseTo(1.2)
-    expect(path.staging[1]).toBeCloseTo(rearItems[0].center[1])
+  it('stages outside the rear (z=0) wall at low carry height', () => {
+    const [, h] = rearItems[0].sceneSize
     expect(path.staging[2]).toBeCloseTo(-1.5)
-  })
-
-  it('waypoints just inside the doorway at the final x/y', () => {
-    const [, , d] = rearItems[0].sceneSize
-    expect(path.waypoint).toEqual([
-      rearItems[0].center[0],
-      rearItems[0].center[1],
-      d / 2,
-    ])
+    expect(path.staging[1]).toBeCloseTo(h / 2 + 0.02)
   })
 
   it('ends at the exact final mesh centre', () => {
     expect(path.final).toEqual(rearItems[0].center)
   })
 
-  it('never moves backwards on segment 2 (final z ≥ waypoint z)', () => {
+  it('EVERY item (incl. stacked) crosses the wall plane inside the door frame', () => {
+    const door = demoScenario.vehicle.doors.find((d) => d.side === 'rear')!
     for (const item of rearItems) {
       const p = buildItemPath(item, demoScenario.vehicle)
-      expect(p.final[2]).toBeGreaterThanOrEqual(p.waypoint[2])
+      assertCrossesInsideDoorFrame(
+        pathPoints(p),
+        item.sceneSize,
+        door,
+        demoScenario.vehicle,
+      )
     }
+  })
+
+  it('a stacked item lifts at the destination, not at the door', () => {
+    const stacked = rearItems.find((i) => i.min.y > 0)!
+    const p = buildItemPath(stacked, demoScenario.vehicle)
+    const [, h] = stacked.sceneSize
+    // Carried low through the doorway…
+    expect(p.waypoints[0][1]).toBeCloseTo(h / 2 + 0.02)
+    // …and reaches final height only at the second-to-last anchor.
+    expect(p.waypoints[p.waypoints.length - 1][1]).toBeCloseTo(stacked.center[1])
   })
 })
 
@@ -59,22 +105,25 @@ describe('buildItemPath — side door', () => {
     expect(leftItems.length).toBeGreaterThan(0)
   })
 
-  it('stages 150cm out from the x=0 wall at the door z-centre and final height', () => {
-    // Box-truck side door: z 210, width 200 (runs along Z) → centre z = 310cm.
+  it('stages 150cm out from the x=0 wall at low carry height', () => {
     for (const item of leftItems) {
       const path = buildItemPath(item, demoSideDoorScenario.vehicle)
+      const [, h] = item.sceneSize
       expect(path.staging[0]).toBeCloseTo(-1.5)
-      expect(path.staging[1]).toBeCloseTo(item.center[1])
-      expect(path.staging[2]).toBeCloseTo(3.1)
+      expect(path.staging[1]).toBeCloseTo(h / 2 + 0.02)
     }
   })
 
-  it('waypoints just inside the wall at the final y/z, then slides inward (+X)', () => {
+  it('EVERY left-door item crosses the x=0 plane inside the door frame', () => {
+    const door = demoSideDoorScenario.vehicle.doors.find((d) => d.side === 'left')!
     for (const item of leftItems) {
-      const path = buildItemPath(item, demoSideDoorScenario.vehicle)
-      const [w] = item.sceneSize
-      expect(path.waypoint).toEqual([w / 2, item.center[1], item.center[2]])
-      expect(path.final[0]).toBeGreaterThanOrEqual(path.waypoint[0])
+      const p = buildItemPath(item, demoSideDoorScenario.vehicle)
+      assertCrossesInsideDoorFrame(
+        pathPoints(p),
+        item.sceneSize,
+        door,
+        demoSideDoorScenario.vehicle,
+      )
     }
   })
 
@@ -114,30 +163,30 @@ describe('transformAt', () => {
     expect(tr.position).toEqual(path.staging)
   })
 
-  it('mid segment 1: strictly between staging and waypoint', () => {
-    const tr = transformAt(start + LOADING_DUR_S * 0.25, k, path)
-    expect(tr.phase).toBe('moving')
-    for (const axis of [0, 1, 2] as const) {
-      const [lo, hi] = [path.staging[axis], path.waypoint[axis]].sort((a, b) => a - b)
-      expect(tr.position[axis]).toBeGreaterThanOrEqual(lo)
-      expect(tr.position[axis]).toBeLessThanOrEqual(hi)
+  it('hits every waypoint anchor exactly at its segment boundary', () => {
+    const points = pathPoints(path)
+    const segments = points.length - 1
+    for (let i = 0; i <= segments; i++) {
+      const tr = transformAt(start + LOADING_DUR_S * (i / segments), k, path)
+      // The final anchor lands in phase 'placed'; all others mid-flight.
+      expect(tr.position[0]).toBeCloseTo(points[i][0])
+      expect(tr.position[1]).toBeCloseTo(points[i][1])
+      expect(tr.position[2]).toBeCloseTo(points[i][2])
     }
   })
 
-  it('at the segment boundary (u=0.5): exactly the waypoint', () => {
-    const tr = transformAt(start + LOADING_DUR_S * 0.5, k, path)
-    expect(tr.position[0]).toBeCloseTo(path.waypoint[0])
-    expect(tr.position[1]).toBeCloseTo(path.waypoint[1])
-    expect(tr.position[2]).toBeCloseTo(path.waypoint[2])
-  })
-
-  it('mid segment 2: strictly between waypoint and final', () => {
-    const tr = transformAt(start + LOADING_DUR_S * 0.75, k, path)
-    expect(tr.phase).toBe('moving')
-    for (const axis of [0, 1, 2] as const) {
-      const [lo, hi] = [path.waypoint[axis], path.final[axis]].sort((a, b) => a - b)
-      expect(tr.position[axis]).toBeGreaterThanOrEqual(lo)
-      expect(tr.position[axis]).toBeLessThanOrEqual(hi)
+  it('mid segment: stays inside the bounding box of its two anchors', () => {
+    const points = pathPoints(path)
+    const segments = points.length - 1
+    for (let seg = 0; seg < segments; seg++) {
+      const u = (seg + 0.5) / segments
+      const tr = transformAt(start + LOADING_DUR_S * u, k, path)
+      expect(tr.phase).toBe('moving')
+      for (const axis of [0, 1, 2] as const) {
+        const [lo, hi] = [points[seg][axis], points[seg + 1][axis]].sort((a, b) => a - b)
+        expect(tr.position[axis]).toBeGreaterThanOrEqual(lo - 1e-9)
+        expect(tr.position[axis]).toBeLessThanOrEqual(hi + 1e-9)
+      }
     }
   })
 
