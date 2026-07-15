@@ -44,14 +44,14 @@ export function destinationLabel(
   return n === undefined ? 'not placed' : `→ Trip ${n}`
 }
 
-/** Plain-language chip text per unplaceable reason. */
+/** Plain-language chip text per unplaceable reason (no dev jargon — T20). */
 export const REASON_LABEL: Record<UnplacedReason, string> = {
   'exceeds-vehicle-dimensions': 'Too large for vehicle',
-  'exceeds-payload': 'Over payload',
-  'no-valid-placement': 'No valid placement',
-  'stacking-constraint': 'Stacking constraint',
-  'accessibility-constraint': 'Accessibility constraint',
-  'trip-limit-reached': 'Trip limit reached',
+  'exceeds-payload': 'Too heavy for vehicle',
+  'no-valid-placement': 'No valid position found',
+  'stacking-constraint': 'Could not be stacked safely',
+  'accessibility-constraint': 'Could not be reached to load',
+  'trip-limit-reached': 'Ran out of trips',
 }
 
 export type WarningSeverity = 'error' | 'warn'

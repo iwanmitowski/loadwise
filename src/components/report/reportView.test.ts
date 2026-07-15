@@ -57,7 +57,7 @@ describe('destination trip derivation', () => {
 describe('label + severity maps', () => {
   it('has a plain-language label for every reason', () => {
     expect(REASON_LABEL['exceeds-vehicle-dimensions']).toBe('Too large for vehicle')
-    expect(REASON_LABEL['no-valid-placement']).toBe('No valid placement')
+    expect(REASON_LABEL['no-valid-placement']).toBe('No valid position found')
   })
 
   it('marks hard-failure warnings as errors, the rest as warn', () => {
