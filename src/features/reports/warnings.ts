@@ -12,9 +12,14 @@ import type {
   UnplacedCargo,
   UnplacedReason,
 } from '@/types'
+import {
+  overloadBreaches,
+  supportLoads,
+  underloadBreach,
+} from '@/features/optimizer/axles'
 import { unbracedCargo } from '@/features/optimizer/bracing'
 import { toPlacedBox, type PlacedBox } from '@/features/optimizer/geometry'
-import { cargoTemplateMap, tripWeightSplit } from './metrics'
+import { cargoShopMap, cargoTemplateMap, tripWeightSplit, weightSplit } from './metrics'
 
 /** Build every warning for a finished result, in a deterministic order. */
 export function buildWarnings(
@@ -85,9 +90,11 @@ function tripWarnings(
   // mass-half share is the proxy). Front bias is the front-pack rule's *intent*
   // (mass over/between the axles), so it only warns when extreme (< 0.5) on a
   // heavily loaded vehicle (util ≥ 0.7) — light front-packed trips stay silent.
+  // Lateral threshold per docs/deep-research-cargo-loading.md: red at a 10%+
+  // side difference (product warning threshold, not a legal rule).
   const split = tripWeightSplit(trip, scenario)
   const rearHeavy = split.rear > split.front
-  const lrTripped = m.leftRightBalance < 0.85
+  const lrTripped = m.leftRightBalance < 0.9
   const zTripped = rearHeavy
     ? m.frontRearBalance < 0.9
     : m.frontRearBalance < 0.5 && m.weightUtilization >= 0.7
@@ -125,17 +132,93 @@ function tripWarnings(
 
   // Unsecured cargo — no forward blocking chain to the front wall. Under
   // braking (EN 12195-1's 0.8g forward case) these items rely on lashing,
-  // which the MVP doesn't model — so surface them for the driver. LIFO
-  // delivery bands make some of this unavoidable (each band ends at a gap);
-  // the warning quantifies the lashing burden rather than failing the trip.
+  // which the MVP doesn't model — so surface them for the driver, with the
+  // extra forward restraint they need: F = (0.8 − μ)·m·g at the guidelines'
+  // generic dry-friction assumption μ ≈ 0.3, expressed in daN as printed on
+  // strap labels. LIFO delivery bands make some of this unavoidable (each band
+  // ends at a gap); the warning quantifies the lashing burden rather than
+  // failing the trip.
   const boxes = resolveTripBoxes(trip, scenario)
   const unbraced = unbracedCargo(boxes, scenario.vehicle.cargoSpace)
   if (unbraced.length > 0) {
+    const ids = new Set(unbraced)
+    const massKg = boxes.reduce((sum, b) => sum + (ids.has(b.cargoId) ? b.weightKg : 0), 0)
+    const daN = Math.ceil(((0.8 - 0.3) * massKg * 9.81) / 10)
     out.push({
       code: 'unsecured-cargo',
-      message: `${unbraced.length} item(s) have no forward blocking against braking — secure with lashings.`,
+      message:
+        `${unbraced.length} item(s) (${Math.round(massKg)}kg) have no forward blocking against braking — ` +
+        `secure with lashings (≈${daN} daN extra forward restraint at μ≈0.3, planning estimate).`,
       tripId: trip.id,
     })
+  }
+
+  // Axle planning estimates (only when the vehicle carries axle geometry):
+  // the departure state, then the state remaining after EVERY delivery stop —
+  // a plan can be legal at the depot and become unsafe mid-route
+  // (docs/physics.md). Overload at departure is normally impossible (the
+  // optimizer hard-rejects it) but hand-authored data is re-checked anyway.
+  if (scenario.vehicle.axles) {
+    out.push(...axleStateWarnings(trip, scenario, boxes))
+  }
+
+  return out
+}
+
+/** Axle/balance breaches at departure and after each stop (planning estimates). */
+function axleStateWarnings(
+  trip: DeliveryTrip,
+  scenario: Scenario,
+  boxes: PlacedBox[],
+): OptimizationWarning[] {
+  const model = scenario.vehicle.axles!
+  const n = trip.tripNumber
+  const out: OptimizationWarning[] = []
+
+  // Lateral is included only for post-stop states — at departure the regular
+  // `imbalance` warning already covers it. It is also skipped while the
+  // remaining load is under 25% of payload: imbalance forces scale with mass,
+  // and a lone last-stop pallet off the centreline is operationally irrelevant
+  // (product threshold, not a legal rule).
+  const breachesOf = (state: PlacedBox[], includeLateral: boolean): string[] => {
+    const loads = supportLoads(state, model)
+    const breaches = [...overloadBreaches(loads, model)]
+    const under = underloadBreach(loads, model)
+    if (under) breaches.push(under)
+    if (includeLateral) {
+      const split = weightSplit(state, scenario.vehicle.cargoSpace)
+      const lateral = split.total === 0 ? 1 : 1 - Math.abs(split.left - split.right) / split.total
+      if (lateral < 0.9 && split.total >= scenario.vehicle.maxPayloadKg * 0.25) {
+        breaches.push(`left/right imbalance ${Math.round((1 - lateral) * 100)}%`)
+      }
+    }
+    return breaches
+  }
+
+  const atDeparture = breachesOf(boxes, false)
+  if (atDeparture.length > 0) {
+    out.push({
+      code: 'axle-limit',
+      message: `Trip ${n} at departure: ${atDeparture.join('; ')} (planning estimate).`,
+      tripId: trip.id,
+    })
+  }
+
+  // Walk the route: after each stop the stop's cargo leaves the vehicle.
+  const shopByCargo = cargoShopMap(scenario)
+  const stops = [...trip.stops].sort((a, b) => a.stopNumber - b.stopNumber)
+  let remaining = boxes
+  for (const stop of stops) {
+    remaining = remaining.filter((b) => shopByCargo.get(b.cargoId) !== stop.shopId)
+    if (remaining.length === 0) break
+    const breaches = breachesOf(remaining, true)
+    if (breaches.length > 0) {
+      out.push({
+        code: 'unsafe-after-stop',
+        message: `Trip ${n} after stop ${stop.stopNumber}: ${breaches.join('; ')} (planning estimate).`,
+        tripId: trip.id,
+      })
+    }
   }
 
   return out

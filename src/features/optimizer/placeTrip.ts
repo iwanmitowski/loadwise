@@ -19,6 +19,7 @@ import type {
   VehicleDoor,
 } from '@/types'
 import { fitsThroughDoor, insideVehicle, type PlacedBox } from './geometry'
+import { axleScore, emptySupportLoads, itemSupportDelta } from './axles'
 import { computeSupport } from './support'
 import { validateCandidate } from './validate'
 
@@ -146,6 +147,10 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
   // Running z-moment (kg·cm) of the committed load — with currentWeightKg this
   // gives the load's longitudinal centre of gravity for the stability term.
   let projMomentZ = 0
+  // Running axle contributions of the committed load (kg on front/kingpin and
+  // rear/axle-group). Only meaningful when the vehicle has axle data.
+  let projAxleA = 0
+  let projAxleB = 0
   // Delivery rank of each committed box, for the front-pack band boundary.
   const rankByCargo = new Map<string, number>()
   let loadingOrder = 0
@@ -198,6 +203,9 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
           projLeft,
           projRight,
           projMomentZ,
+          projAxleA,
+          projAxleB,
+          axles: vehicle.axles,
           currentWeightKg,
           weights: config.weights,
         })
@@ -227,6 +235,15 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
       projLeft += l
       projRight += r
       projMomentZ += best.box.weightKg * (best.box.min.z + best.box.size.depth / 2)
+      if (vehicle.axles) {
+        const delta = itemSupportDelta(
+          best.box.min.z + best.box.size.depth / 2,
+          best.box.weightKg,
+          vehicle.axles,
+        )
+        projAxleA += delta.aKg
+        projAxleB += delta.bKg
+      }
       candidatePoints = updateCandidatePoints(
         candidatePoints,
         best.box,
@@ -400,6 +417,11 @@ type ScoreContext = {
   projRight: number
   /** Running z-moment (kg·cm) of the committed load. */
   projMomentZ: number
+  /** Running axle contributions of the committed load (kg). */
+  projAxleA: number
+  projAxleB: number
+  /** Axle geometry when the vehicle has it — switches the longitudinal term. */
+  axles: VehicleDefinition['axles']
   /** Total committed weight (kg) — with projMomentZ gives the load's z-CoG. */
   currentWeightKg: number
   weights: OptimizerConfig['weights']
@@ -421,8 +443,14 @@ function scorePlacement(box: PlacedBox, ctx: ScoreContext): number {
   const comp = compactness(box, ctx)
   const floor = clamp01(1 - box.min.y / ctx.space.height)
   // Vehicle stability: lateral (left/right) and longitudinal (front/rear)
-  // balance share the weightBalance weight equally.
-  const wb = (weightBalance(box, ctx) + longitudinalBalance(box, ctx)) / 2
+  // balance share the weightBalance weight equally. With axle data the
+  // longitudinal term is the axle-envelope score (physics-driven — the CoG
+  // target follows the plated limits, per docs/physics.md); without it, the
+  // geometric CoG proxy.
+  const longitudinal = ctx.axles
+    ? axleCandidateScore(box, ctx)
+    : longitudinalBalance(box, ctx)
+  const wb = (weightBalance(box, ctx) + longitudinal) / 2
   const sq = clamp01(computeSupport(box, ctx.placed).ratio)
 
   return (
@@ -551,6 +579,24 @@ function longitudinalBalance(box: PlacedBox, ctx: ScoreContext): number {
   return clamp01(1 - penalty)
 }
 
+/**
+ * Axle-envelope quality of the load *including* this candidate: margin to the
+ * plated maxima, guarded by the steer/kingpin minimum share (see axles.ts).
+ * Uses the running committed contributions so each candidate costs O(1).
+ */
+function axleCandidateScore(box: PlacedBox, ctx: ScoreContext): number {
+  const model = ctx.axles!
+  const empty = emptySupportLoads(model)
+  const delta = itemSupportDelta(
+    box.min.z + box.size.depth / 2,
+    box.weightKg,
+    model,
+  )
+  const aKg = empty.aKg + ctx.projAxleA + delta.aKg
+  const bKg = empty.bKg + ctx.projAxleB + delta.bKg
+  return axleScore({ kind: model.kind, aKg, bKg, totalKg: aKg + bKg }, model)
+}
+
 /** 1 − |left−right| / total, using the box's mass projected onto the two X halves. */
 function weightBalance(box: PlacedBox, ctx: ScoreContext): number {
   const [l, r] = projectLeftRight(box, ctx.space.width)
@@ -625,6 +671,14 @@ function classifyUnplaced(
     return {
       reason: 'stacking-constraint',
       detail: 'No position satisfied support/stacking constraints.',
+    }
+  }
+
+  // Only axle limits blocked it: every position would overload an axle.
+  if (seenCodes.size > 0 && [...seenCodes].every((c) => c === 'axle-overload')) {
+    return {
+      reason: 'no-valid-placement',
+      detail: 'No position kept axle loads within limits (planning estimate).',
     }
   }
 

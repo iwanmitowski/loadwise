@@ -19,6 +19,7 @@ import {
   toPlacedBox,
   type PlacedBox,
 } from './geometry'
+import { overloadBreaches, supportLoads } from './axles'
 import { computeSupport, directLoadOnSupporter } from './support'
 
 export type ConstraintViolation = {
@@ -30,6 +31,7 @@ export type ConstraintViolation = {
     | 'floor-only-violated'
     | 'unstackable-support'
     | 'support-overweight'
+    | 'axle-overload'
     | 'door-fit'
   cargoId: string
   detail: string
@@ -82,6 +84,23 @@ export function validateCandidate(
       cargoId: candidate.cargoId,
       detail: `Load ${currentWeightKg + candidate.weightKg}kg exceeds payload ${vehicle.maxPayloadKg}kg.`,
     })
+  }
+
+  // 3b. Axle maxima (planning estimate; only when the vehicle has axle data).
+  // Sound at candidate time because per-item contributions superpose: a plated
+  // max already breached mid-pack cannot be un-breached by placing more cargo
+  // elsewhere. The min-share (steer/kingpin underload) rule is NOT checked here
+  // — it is a ratio that legitimately moves both ways while packing, so it is
+  // evaluated on drive states by the warnings layer instead.
+  if (vehicle.axles) {
+    const loads = supportLoads([...placed, candidate], vehicle.axles)
+    for (const breach of overloadBreaches(loads, vehicle.axles)) {
+      violations.push({
+        code: 'axle-overload',
+        cargoId: candidate.cargoId,
+        detail: `${breach} (planning estimate).`,
+      })
+    }
   }
 
   // 4-7. Support chain
@@ -227,6 +246,19 @@ export function validateLoad(
       cargoId: '',
       detail: `Total load ${totalWeight}kg exceeds payload ${vehicle.maxPayloadKg}kg.`,
     })
+  }
+
+  // 3b. Axle maxima at departure (planning estimate). Underload (min-share) is
+  // a warning-layer concern, not a violation — see validateCandidate.
+  if (vehicle.axles) {
+    const loads = supportLoads(boxes, vehicle.axles)
+    for (const breach of overloadBreaches(loads, vehicle.axles)) {
+      violations.push({
+        code: 'axle-overload',
+        cargoId: '',
+        detail: `${breach} (planning estimate).`,
+      })
+    }
   }
 
   // 4-7. Support chain, each box against all the others.
