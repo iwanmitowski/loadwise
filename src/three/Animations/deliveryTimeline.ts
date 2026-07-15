@@ -214,6 +214,35 @@ export function stopStateAt(t: number, plan: StopPlan): StopState {
   return { phase: 'done', opIndex: null, opProgress: 0, doorOpen: false }
 }
 
+/**
+ * Whether `cargoId` has already been handed off at the current playback moment,
+ * i.e. it is no longer aboard the truck. This is the single source of truth for
+ * both the box's visibility and whether it still counts toward the load's
+ * balance point:
+ *   - delivered at an earlier stop, or
+ *   - delivered at this stop and the stop's choreography is done, or
+ *   - delivered at this stop and its own `deliver` op already completed.
+ * A box is still considered aboard while its own delivery slide is in progress
+ * (it counts until fully handed off).
+ */
+export function itemDeliveredNow(
+  cargoId: string,
+  stopIndex: number,
+  state: StopState,
+  stop: StopPlan | undefined,
+  deliveredAtStop: ReadonlyMap<string, number>,
+): boolean {
+  const deliveredAt = deliveredAtStop.get(cargoId)
+  if (deliveredAt === undefined) return false
+  if (deliveredAt < stopIndex) return true
+  if (deliveredAt > stopIndex) return false
+  // Delivered at exactly this stop: gone once its deliver op has completed.
+  if (state.phase === 'done' || state.phase === 'door-close') return true
+  const opsSoFar =
+    state.phase === 'op' && state.opIndex !== null ? (stop?.ops.slice(0, state.opIndex) ?? []) : []
+  return opsSoFar.some((op) => op.type === 'deliver' && op.cargoId === cargoId)
+}
+
 // ---------------------------------------------------------------------------
 // Blocker staging slots
 // ---------------------------------------------------------------------------
