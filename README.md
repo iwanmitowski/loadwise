@@ -130,6 +130,11 @@ Built as a 48-hour hackathon MVP by Ivan Mitovski, Daniel Dimitrov and
 Slavey Dikovski — three developers working in parallel across the domain/optimizer,
 3D/animation and UI/state tracks (see [docs/TASKS.md](docs/TASKS.md)).
 
+This was an **agentic-first hackathon**: every task was implemented by AI coding
+agents (Claude Code) driven by the team in parallel, one self-contained prompt
+per task. See [CLAUDE.md](CLAUDE.md) for the agent workflow and
+[docs/prompts/](docs/prompts/) for the per-task prompts.
+
 ## Docs
 
 - [idea.md](idea.md) — full product spec (source of truth)
