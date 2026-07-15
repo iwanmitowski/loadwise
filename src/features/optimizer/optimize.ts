@@ -207,6 +207,9 @@ export function optimize(
       effectiveDefer = new Set<string>()
       cascade = { kept: plan.placements, orphaned: [] }
     }
+    // Insertion order IS the loading order: placeTrip only commits slots with a
+    // clear loading route past the cargo already inserted, so the sequence is
+    // physically executable by construction (and removals only open space).
     const placements = stamp(cascade.kept, tripId)
 
     const deferredCargo: UnplacedCargo[] = []
@@ -452,6 +455,7 @@ function stamp(
 ): CargoPlacement[] {
   return placements.map((p, i) => ({ ...p, tripId, loadingOrder: i + 1 }))
 }
+
 
 function tally(ids: string[]): Map<string, number> {
   const m = new Map<string, number>()

@@ -20,6 +20,7 @@ import type {
 } from '@/types'
 import { fitsThroughDoor, insideVehicle, type PlacedBox } from './geometry'
 import { axleScore, emptySupportLoads, itemSupportDelta } from './axles'
+import { planLoadingRoute } from './reachability'
 import { computeSupport } from './support'
 import { validateCandidate } from './validate'
 
@@ -167,7 +168,7 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
     // candidate loop.
     const boundary = laterBandBoundary(placed, rankByCargo, rank, space.depth)
 
-    let best: Scored | null = null
+    const scored: Scored[] = []
     const seenCodes = new Set<string>()
 
     for (const rotationY of ORIENTATIONS) {
@@ -209,15 +210,40 @@ export function planSingleTrip(input: TripPlanInput): TripPlanOutput {
           currentWeightKg,
           weights: config.weights,
         })
-        if (best === null || isBetter(box, score, best)) {
-          best = { box, rotationY, score }
-        }
+        scored.push({ box, rotationY, score })
+      }
+    }
+
+    // Walk candidates best-first and commit the first one with a physically
+    // clear loading route past the already-placed cargo (a slot can be
+    // geometrically valid yet impossible to reach through the door). Capped:
+    // when the top candidates are all corridor-blocked the rest of the ranking
+    // almost never differs — the item defers rather than burning the budget.
+    scored.sort(compareScored)
+    let best: Scored | null = null
+    let reachChecks = 0
+    for (const cand of scored) {
+      if (reachChecks >= MAX_REACH_CHECKS) break
+      reachChecks += 1
+      if (planLoadingRoute(cand.box.size, cand.box.min, door, vehicle, placed) !== null) {
+        best = cand
+        break
       }
     }
 
     if (best === null) {
-      const { reason, detail } = classifyUnplaced(template, currentWeightKg, seenCodes, vehicle)
-      unplaced.push({ cargoId: item.id, shopId: item.shopId, reason, detail })
+      if (scored.length > 0) {
+        // Valid slots existed but none was reachable through the door.
+        unplaced.push({
+          cargoId: item.id,
+          shopId: item.shopId,
+          reason: 'accessibility-constraint',
+          detail: 'No loading route past already-placed cargo reaches any valid slot.',
+        })
+      } else {
+        const { reason, detail } = classifyUnplaced(template, currentWeightKg, seenCodes, vehicle)
+        unplaced.push({ cargoId: item.id, shopId: item.shopId, reason, detail })
+      }
     } else {
       // Commit the best placement.
       loadingOrder += 1
@@ -481,16 +507,22 @@ function deliveryOrderCompatibility(box: PlacedBox, ctx: ScoreContext): number {
     if (faceZ > ctx.boundary) return 0
     return clamp01(faceZ / ctx.boundary)
   }
-  // Side door: 1 when the item's z-interval overlaps the door's z-interval,
-  // else decays with the gap to that interval.
+  // Side door: band overlap (z) blended with FAR-SIDE-FIRST (x) — the side-door
+  // mirror of the front-pack rule. Without it the first boxes hug the door
+  // wall and wall off the opening, making every later slot unreachable
+  // (found live: 16 of 24 side-door items deferred by the reachability check).
   const bz0 = box.min.z
   const bz1 = box.min.z + box.size.depth
   const dz0 = ctx.door.position.z
   const dz1 = ctx.door.position.z + ctx.door.width
   const overlap = Math.min(bz1, dz1) - Math.max(bz0, dz0)
-  if (overlap >= 0) return 1
-  const gap = Math.max(bz0, dz0) - Math.min(bz1, dz1)
-  return clamp01(1 - gap / ctx.space.depth)
+  const bandScore =
+    overlap >= 0 ? 1 : clamp01(1 - (Math.max(bz0, dz0) - Math.min(bz1, dz1)) / ctx.space.depth)
+  const farness =
+    ctx.door.side === 'left'
+      ? (box.min.x + box.size.width) / ctx.space.width
+      : (ctx.space.width - box.min.x) / ctx.space.width
+  return clamp01(0.5 * bandScore + 0.5 * farness)
 }
 
 /**
@@ -618,12 +650,19 @@ function projectLeftRight(box: PlacedBox, vehicleWidth: number): [number, number
   return [leftKg, box.weightKg - leftKg]
 }
 
-/** Selection tiebreak (rule 7): higher score, then lower y → higher z → lower x. */
-function isBetter(box: PlacedBox, score: number, best: Scored): boolean {
-  if (score !== best.score) return score > best.score
-  if (box.min.y !== best.box.min.y) return box.min.y < best.box.min.y
-  if (box.min.z !== best.box.min.z) return box.min.z > best.box.min.z
-  return box.min.x < best.box.min.x
+/**
+ * Reachability checks are O(placed × route segments × entry candidates); cap
+ * how many of the ranked candidates each item may test before deferring.
+ */
+const MAX_REACH_CHECKS = 200
+
+/** Ranking (rule 7): higher score, then lower y → higher z → lower x → rot 0. */
+function compareScored(a: Scored, b: Scored): number {
+  if (a.score !== b.score) return b.score - a.score
+  if (a.box.min.y !== b.box.min.y) return a.box.min.y - b.box.min.y
+  if (a.box.min.z !== b.box.min.z) return b.box.min.z - a.box.min.z
+  if (a.box.min.x !== b.box.min.x) return a.box.min.x - b.box.min.x
+  return a.rotationY - b.rotationY
 }
 
 // --------------------------------------------------------------------------

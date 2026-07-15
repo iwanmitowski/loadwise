@@ -140,6 +140,95 @@ describe('buildItemPath — side door', () => {
   })
 })
 
+describe('buildItemPath — placed cargo is solid', () => {
+  // Item k flies while items 0..k-1 sit at their finals. Dense-sample every
+  // flight and assert the moving box never interpenetrates a placed box.
+  // TOUCH_EPS (1.5cm) allows flush contact (sliding onto a supporter).
+  function assertNoInterpenetration(
+    items: readonly ReturnType<typeof buildCargoRenderItems>[number][],
+    vehicle: VehicleDefinition,
+  ) {
+    // Obstacles for path building are domain-cm (min + size); the sweep
+    // asserts in scene metres against each obstacle's scene-space box.
+    const placedCm: { min: { x: number; y: number; z: number }; size: typeof items[number]['size'] }[] = []
+    const placedScene: { center: Vec3Tuple; size: [number, number, number] }[] = []
+    for (const item of items) {
+      const path = buildItemPath(item, vehicle, item.assignedDoor, placedCm)
+      const points = pathPoints(path)
+      const [w, h, d] = item.sceneSize
+      for (let i = 0; i <= 1000; i++) {
+        const p = pathAt(i / 1000, points)
+        for (const o of placedScene) {
+          const overlapX =
+            Math.min(p[0] + w / 2, o.center[0] + o.size[0] / 2) -
+            Math.max(p[0] - w / 2, o.center[0] - o.size[0] / 2)
+          const overlapY =
+            Math.min(p[1] + h / 2, o.center[1] + o.size[1] / 2) -
+            Math.max(p[1] - h / 2, o.center[1] - o.size[1] / 2)
+          const overlapZ =
+            Math.min(p[2] + d / 2, o.center[2] + o.size[2] / 2) -
+            Math.max(p[2] - d / 2, o.center[2] - o.size[2] / 2)
+          const interpenetrates =
+            overlapX > 0.02 && overlapY > 0.02 && overlapZ > 0.02
+          expect(
+            interpenetrates,
+            `${item.cargoId} at u=${i / 1000} passes through ${JSON.stringify(o.center)}`,
+          ).toBe(false)
+        }
+      }
+      placedCm.push({ min: item.min, size: item.size })
+      placedScene.push({ center: item.center, size: item.sceneSize })
+    }
+  }
+
+  it('demo fixture: no flight passes through already-placed cargo', () => {
+    assertNoInterpenetration(rearItems, demoScenario.vehicle)
+  })
+
+  it('side-door fixture too', () => {
+    assertNoInterpenetration(sideItems, demoSideDoorScenario.vehicle)
+  })
+
+  it('adversarial case: an early box near the door forces a lift-over', () => {
+    // Two same-shop floor boxes: the first placed right at the door, the
+    // second targeted BEHIND it — a low straight carry would sweep through
+    // the first. The path must rise above it.
+    // 60cm cubes: early at z 0..60cm centred x=120cm; late at z 100..160cm.
+    const cube = { width: 60, height: 60, depth: 60 }
+    const early = {
+      ...rearItems[0],
+      min: { x: 90, y: 0, z: 0 },
+      size: cube,
+      center: [1.2, 0.3, 0.3] as Vec3Tuple,
+      sceneSize: [0.6, 0.6, 0.6] as [number, number, number],
+    }
+    const late = {
+      ...rearItems[0],
+      min: { x: 90, y: 0, z: 100 },
+      size: cube,
+      center: [1.2, 0.3, 1.3] as Vec3Tuple,
+      sceneSize: [0.6, 0.6, 0.6] as [number, number, number],
+    }
+    const obstacle = { min: early.min, size: early.size }
+
+    const path = buildItemPath(late, demoScenario.vehicle, 'rear', [obstacle])
+    // The chain must climb above the early box (top at 0.6m) at some point.
+    const points = pathPoints(path)
+    const peak = Math.max(...points.map((p) => p[1]))
+    expect(peak).toBeGreaterThan(0.6)
+    // And the dense sweep confirms no interpenetration.
+    const [w, h, d] = late.sceneSize
+    for (let i = 0; i <= 1000; i++) {
+      const p = pathAt(i / 1000, points)
+      const ox =
+        Math.min(p[0] + w / 2, 1.5) - Math.max(p[0] - w / 2, 0.9)
+      const oy = Math.min(p[1] + h / 2, 0.6) - Math.max(p[1] - h / 2, 0)
+      const oz = Math.min(p[2] + d / 2, 0.6) - Math.max(p[2] - d / 2, 0)
+      expect(ox > 0.02 && oy > 0.02 && oz > 0.02).toBe(false)
+    }
+  })
+})
+
 describe('transformAt', () => {
   const item = rearItems[3]
   const path = buildItemPath(item, demoScenario.vehicle)
