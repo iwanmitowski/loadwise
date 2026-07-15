@@ -7,7 +7,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | ID | Task | Track | Owner | Depends | Prompt | Status |
 |---|---|---|---|---|---|---|
 | T01 | Scaffold, tooling, CI, Vercel deploy | C | ivan-mitovski | — | [T01](prompts/T01-scaffold-and-deploy.md) | done |
-| T02 | Domain types, vehicle & cargo catalog, config | A | ivan-mitovski | — | [T02](prompts/T02-domain-types-and-data.md) | review |
+| T02 | Domain types, vehicle & cargo catalog, config | A | ivan-mitovski | — | [T02](prompts/T02-domain-types-and-data.md) | done |
 | T03 | Seeded RNG + demo fixtures | A | ivan-mitovski | T02 | [T03](prompts/T03-rng-and-fixtures.md) | done |
 | T04 | Scenario generator | A | ivan-mitovski | T02, T03 | [T04](prompts/T04-scenario-generator.md) | done |
 | T05 | Geometry & constraint validation | A | ivan-mitovski | T02 | [T05](prompts/T05-validation-core.md) | done |
@@ -25,7 +25,7 @@ Rules: respect the Depends column · one branch per task (`feat/Txx-slug`) · co
 | T17 | Demo mode + edge-case UX | C | daniel-dimitrov | T10, T11 | [T17](prompts/T17-demo-mode-and-edge-ux.md) | done |
 | T18 | Integration hardening (15 edge cases) | all (lead A) | ivan-mitovski | T04–T16 | [T18](prompts/T18-integration-hardening.md) | done |
 | T19 | Test pass + Playwright smoke | all (lead C) | ivan-mitovski | T18 | [T19](prompts/T19-test-pass.md) | done |
-| T20 | Polish, README, final deploy, demo script | all (lead B) | — | T18 | [T20](prompts/T20-polish-and-ship.md) | todo |
+| T20 | Polish, README, final deploy, demo script | all (lead B) | ivan-mitovski | T18 | [T20](prompts/T20-polish-and-ship.md) | done |
 | T21 | Axle-load physics + door-true animation paths | A+B | ivan-mitovski | T07, T14 | [T21](prompts/T21-axle-physics.md) | done |
 | T22 | Score recalibration (research-doc aligned) | A+C | ivan-mitovski | T08, T21 | [T22](prompts/T22-score-recalibration.md) | done |
 
