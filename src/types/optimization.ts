@@ -67,6 +67,13 @@ export type OptimizationMetrics = {
   emptyVolumeCm3: number
   leftRightBalance: number
   frontRearBalance: number
+  /**
+   * Longitudinal stability 0..1 (T22): axle-envelope compliance when the
+   * vehicle has axle geometry, else a forward-CoG proxy. This — NOT
+   * `frontRearBalance` (a raw 50/50 closeness the warnings still use to name a
+   * rear-heavy side) — is what the score rewards; forward loading is good.
+   */
+  longitudinalStability: number
   blockedCargoCount: number
   extraUnloadingMoves: number
   splitShopIds: string[]

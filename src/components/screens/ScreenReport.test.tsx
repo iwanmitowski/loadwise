@@ -70,7 +70,7 @@ describe('ScreenReport', () => {
       'Volume utilization',
       'Empty volume',
       'Left/right balance',
-      'Front/rear balance',
+      'Load stability (axle/CoG)',
       'Blocked cargo',
       'Extra unloading moves',
       'Split shop orders',

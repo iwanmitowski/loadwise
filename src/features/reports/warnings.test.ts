@@ -52,6 +52,7 @@ const baseMetrics: OptimizationMetrics = {
   emptyVolumeCm3: 0,
   leftRightBalance: 1,
   frontRearBalance: 1,
+  longitudinalStability: 1,
   blockedCargoCount: 0,
   extraUnloadingMoves: 0,
   splitShopIds: [],

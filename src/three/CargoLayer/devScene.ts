@@ -127,6 +127,7 @@ export function buildSyntheticScene(count = 100): {
       emptyVolumeCm3: 0,
       leftRightBalance: 0,
       frontRearBalance: 0,
+      longitudinalStability: 0,
       blockedCargoCount: 0,
       extraUnloadingMoves: 0,
       splitShopIds: [],

@@ -23,11 +23,16 @@ export const DEFAULT_OPTIMIZER_CONFIG: OptimizerConfig = {
   safetyTimeLimitMs: 8000,
 }
 
-/** Weights for the report's overall quality score (see idea.md §Placement Scoring). */
+/**
+ * Weights for the report's overall quality score (sum to 100). Recalibrated in
+ * T22 to grade what the planner controls (docs/deep-research-cargo-loading.md):
+ * accessibility + stability compliance lead; utilisation is `max(vol,weight)`
+ * and secondary; longitudinal quality is axle/CoG compliance, not a 50/50 split.
+ */
 export const SCORE_WEIGHTS = {
-  volume: 25,
-  weight: 15,
-  balance: 20,
   accessibility: 25,
+  stability: 25,
+  lateralBalance: 15,
+  utilization: 20,
   delivery: 15,
 } as const

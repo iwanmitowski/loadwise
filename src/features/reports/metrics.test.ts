@@ -88,8 +88,15 @@ describe('buildTripMetrics — hand-computed fixture', () => {
     expect(m.splitShopIds).toEqual([])
   })
 
-  it('scores the trip: round(1.35 + 1.8 + 10 + 16.667 + 15) = 45', () => {
-    expect(m.overallScore).toBe(45)
+  it('exposes longitudinal stability (no axle data → forward-CoG proxy)', () => {
+    // All 120 kg sits in the rear half (front share 0) → 0.7 + (0−0.5)×1.2 = 0.1.
+    expect(m.longitudinalStability).toBeCloseTo(0.1, 10)
+  })
+
+  it('scores the trip: round(access 16.667 + stability 2.5 + lateral 15 + util 2.4 + delivery 15) = 52', () => {
+    // accessibility 1−1/3=0.667×25; stability 0.1×25; lateral 1×15;
+    // utilization max(0.12,0.054)=0.12×20; delivery 1×15.
+    expect(m.overallScore).toBe(52)
   })
 })
 
