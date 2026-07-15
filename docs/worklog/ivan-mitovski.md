@@ -255,3 +255,16 @@
 - Decisions/deviations: no code changes to product source were needed — every edge case was already handled correctly by T07/T08/T17 and the T21/T22 work. Kept T18 to verification + a durable integration test rather than manufacturing changes. PR-description checklist lives here (owner-actioned PR can copy it).
 - Follow-ups: none blocking. T19 (Playwright smoke in CI) can build on the `verify` skill + these scripts; T20 (deploy/README/demo script) can proceed — demo seed is locked.
 - Files: src/features/integration.test.ts (new, 18 tests), docs/TASKS.md
+
+## [2026-07-15 15:00] T19 — Test pass + Playwright smoke
+- Dev: ivan-mitovski · Model: Opus 4.8 (1M) · Branch: feat/T19-tests
+- Done: added the cross-cutting safety nets per the T19 priority order.
+  1. **Optimizer invariant suite** (`src/features/optimizer/invariants.test.ts`) — the highest-value test: 20 seeds × 3 vehicles × side-door {none,left} = 120 real pipeline runs. Per trip asserts `validateLoad` == [] (geometric + axle validity), `loadingOrder` is a dense 1..n permutation, trip weight ≤ payload, and every stop's shop actually has cargo. Across the result asserts **item conservation** — every requested item is placed exactly once OR permanently unplaceable, never both/lost/duplicated — and `trips ≤ maxTrips`. Failures print `[seed vehicle door]` for instant repro. 6 tests, all green; no optimizer fix needed (T18 already hardened it).
+  2. **Determinism**: verified T18's `integration.test.ts` already carries the full-pipeline determinism test (`integration — determinism`, same seed → bit-identical result excl. elapsedMs) — not duplicated.
+  3. **Store/UI regression**: skipped — T18 found no bugs, so nothing to pin.
+  4. **Playwright smoke**: installed `@playwright/test` (chromium only) + `playwright.config.ts` (drives a production `vite preview` build, not dev, to dodge the HMR reload gotcha; webServer builds first so `npm run test:e2e` is self-contained). One spec `e2e/smoke.spec.ts`: Load demo → Planning lists shops → Optimize → Simulation canvas mounts → Report → overall score badge > 0 → "Result JSON" triggers a real download; asserts zero page errors. Passes in ~2.2s (10s incl. build). Wired as a **separate non-blocking `e2e-smoke` CI job** (installs chromium with `--with-deps`) — kept out of the required merge checks per the prompt.
+- Config: `vite.config.ts` `test.include: ['src/**/*.{test,spec}.{ts,tsx}']` so vitest never collects the Playwright `.spec.ts` (they share the `.spec` suffix). `.gitignore` += Playwright artefacts. `test:e2e` npm script.
+- Verification: full unit suite **362 tests** green (45 files, e2e excluded), typecheck + lint + build green; Playwright smoke green locally.
+- Decisions/deviations: no component-level 3D tests (per the prompt's settled decision — invariant suite + smoke cover the risk). Smoke drives preview not dev for CI stability. Left the e2e job honest (no `continue-on-error`) but separate from `build`; it should stay non-required in branch protection.
+- Follow-ups: none blocking. T20 (deploy/README/demo script) can proceed.
+- Files: src/features/optimizer/invariants.test.ts (new), e2e/smoke.spec.ts (new), playwright.config.ts (new), vite.config.ts, package.json, package-lock.json, .github/workflows/ci.yml, .gitignore, docs/TASKS.md

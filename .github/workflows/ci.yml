@@ -32,3 +32,26 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # T19 Playwright smoke — separate, non-blocking job (keep it OUT of the
+  # required checks in branch protection). Drives the demo walkthrough against a
+  # production preview build. `test:e2e` builds + previews via playwright.config.
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright browser (chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test
+        run: npm run test:e2e
