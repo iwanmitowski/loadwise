@@ -1,5 +1,15 @@
 # Worklog — Daniel Dimitrov
 
+## [2026-07-16 16:12] Presentation — future-improvements slide 08
+- Dev: daniel-dimitrov · Model: Fable 5 · Branch: feat/presentation-roadmap-slide
+- Done: brainstormed post-MVP improvement ideas with Claude, then added a new "What's next" slide to the pitch deck (`docs/presentation/index.html`) as **slide 08**, moving the closing "It's live" slide to **09** (`#s9`, rail + keyboard nav pick it up automatically since both derive from the TOC). The slide presents three planned improvements as pillar cards: (1) *You vs. the optimizer* — user loads the truck manually with live rule feedback, then sees the optimizer's plan and a side-by-side score comparison; (2) *Explainable placements* — click a box to see why it's placed there; (3) *Right-vehicle advice* — recommend the vehicle type from the cargo list before planning.
+- Files: docs/presentation/index.html, docs/worklog/daniel-dimitrov.md
+- Decisions/deviations:
+  - Not a board task (no Txx) — commit prefixed `Docs:` following the existing non-task `Fix:` precedent.
+  - Removed the closing slide's `Next: Loader Mode` roadmap chip — it duplicated the new slide's card 01; the other two chips (axle charts, lock & re-optimize) stay as they're distinct smaller items.
+  - Verified with headless Playwright screenshots of slides 08/09 (both render, rail shows 9 entries). Full `npm run test` showed 5 failures, all machine-load timeouts (each file passes in isolation, incl. the "not CI-gating" perf smoke) — pre-existing, unrelated to this docs-only change.
+- Follow-ups: the three roadmap items are candidates for T24+ prompts (challenge mode would build on T05 validation + T08/T22 scoring + T13 interaction); vehicle recommendation could reuse the multi-trip planner to trial-pack each vehicle type and compare trip counts/scores.
+
 ## [2026-07-15 22:05] T23 — Side-door unload blockers respect the door opening
 - Dev: daniel-dimitrov · Model: Opus 4.8 · Branch: feat/T23-side-door-unload-blockers
 - Symptom (user report, demo-1 seed): report said "2 item(s) require moving other cargo when unloading" but the 3D view made the move look unnecessary.
